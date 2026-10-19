@@ -10,6 +10,8 @@ final class FormatoEtiqueta {
     public readonly int $desfaseX;
     public readonly int $margenX;
     public readonly int $ajusteQr;
+    /** ^LT en dots: mueve todo el contenido arriba (-) o abajo (+). ZPL acepta -120…120. */
+    public readonly int $ajusteSuperior;
 
     public function __construct(
         public readonly int $dpi,
@@ -19,6 +21,7 @@ final class FormatoEtiqueta {
         public readonly string $media = 'gap',
         ?float $anchoCabezalMm = null,
         float $ajusteQrMm = 0,
+        float $ajusteSuperiorMm = 0,
     ) {
         $this->ancho = $this->dots($anchoMm);
         $this->alto = $this->dots($altoMm);
@@ -27,6 +30,7 @@ final class FormatoEtiqueta {
         $this->desfaseX = intdiv($this->ancho - $this->anchoImprimible, 2);
         $this->margenX = $this->desfaseX + $this->margen;
         $this->ajusteQr = $this->dots($ajusteQrMm);
+        $this->ajusteSuperior = max(-120, min(120, $this->dots($ajusteSuperiorMm)));
     }
 
     public static function desdeConfig(): self {
@@ -38,6 +42,7 @@ final class FormatoEtiqueta {
             config('etiquetas.media'),
             config('etiquetas.ancho_cabezal_mm'),
             config('etiquetas.ajuste_qr_mm', 0),
+            config('etiquetas.ajuste_superior_mm', 0),
         );
     }
 

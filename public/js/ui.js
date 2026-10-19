@@ -8,6 +8,49 @@
     if (alerta.dataset.autohide) setTimeout(() => cerrar(alerta), 5000);
   });
 
+
+  document.querySelectorAll('[data-nav-mas]').forEach(menu => {
+    document.addEventListener('click', e => {
+      if (menu.open && !menu.querySelector('.nav-mas-panel').contains(e.target) && !menu.querySelector('summary').contains(e.target)) menu.open = false;
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); }
+    });
+  });
+
+  const sw = document.body.dataset.sw;
+  if (sw && 'serviceWorker' in navigator && window.isSecureContext) {
+    window.addEventListener('load', () => navigator.serviceWorker.register(sw, { scope: '/' }).catch(() => {}));
+  }
+
+
+  const dialogo = document.getElementById('dlgMotivo');
+  document.addEventListener('submit', e => {
+    const form = e.target.closest('form[data-motivo]');
+    if (!form) return;
+    if (form.motivo.value.trim()) return; // ya trae motivo: se envía
+    e.preventDefault();
+
+    if (!dialogo || typeof dialogo.showModal !== 'function') {
+      const m = window.prompt(form.dataset.motivo + '\n\nEscribe el motivo:');
+      if (m && m.trim()) { form.motivo.value = m.trim(); form.submit(); }
+      return;
+    }
+
+    const campo = dialogo.querySelector('textarea');
+    dialogo.querySelector('[data-titulo]').textContent = form.dataset.motivo;
+    campo.value = '';
+    dialogo.returnValue = '';
+    dialogo.showModal();
+    campo.focus();
+    dialogo.addEventListener('close', () => {
+      if (dialogo.returnValue === 'ok' && campo.value.trim()) {
+        form.motivo.value = campo.value.trim();
+        form.submit();
+      }
+    }, { once: true });
+  });
+
   document.querySelectorAll('form[data-loading]').forEach(form => {
     form.addEventListener('submit', e => {
       if (e.defaultPrevented) return;
@@ -54,6 +97,19 @@
       });
       if (contador) contador.textContent = visibles;
     });
+  });
+
+  // Excel de trabajo: el selector de embarque solo aplica (y es obligatorio) con alcance "Por embarque".
+  document.querySelectorAll('[data-excel-alcance]').forEach(form => {
+    const alcance = form.querySelector('[data-alcance]');
+    const embarque = form.querySelector('[data-alcance-embarque]');
+    const sincronizar = () => {
+      const activo = alcance.value === 'embarque';
+      embarque.hidden = embarque.disabled = !activo;
+      embarque.required = activo;
+    };
+    alcance.addEventListener('change', () => { sincronizar(); if (!embarque.disabled) embarque.focus(); });
+    sincronizar();
   });
 
   // Selector de PDF: muestra el archivo elegido y avisa antes de enviar si no es PDF o pesa demasiado.

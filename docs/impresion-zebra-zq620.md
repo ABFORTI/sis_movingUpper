@@ -150,38 +150,32 @@ Un solo diseño en dots (`app/Services/Etiquetas`) genera el **ZPL** (`ZplRender
 
 Márgenes: 2 mm arriba y abajo; en horizontal, 2 mm **desde el borde del cabezal** (3.5 mm desde el borde del papel). Área de contenido: **68 × 46 mm**.
 
-**Elementos comunes** (`DisenoBase`)
+**Etiqueta por pieza** (`EtiquetaPieza`, desde 2026-10-14). Cada pieza escaneada lleva **su propia** etiqueta; ninguna representa al embarque completo. Solo tiene tres datos:
 
 | mm desde arriba | Elemento | Tamaño |
 |---|---|---|
-| 2 | Logo **Upper Logistics** (izquierda) y **Euroquip** (derecha) | máx. 21 × 4.25 mm, sin deformar |
-| 7 | línea divisoria | 0.375 mm (3 dots) |
-| 43 | Code128 `TAR-12|20260930` a la izquierda + texto legible a la derecha | módulo 0.25 mm, 5 mm de alto |
+| 2 | rótulo `MODELO` | 2.5 mm |
+| 4.75 | modelo de la pieza (del renglón del inventario; si no tiene, el del SKU; si tampoco, el SKU) | hasta 8 mm, baja hasta 3.5 mm o se recorta con "…" si es largo |
+| 13.5 | rótulo `EMBARQUE` | 2.5 mm |
+| 16.25 | número de embarque completo, `MUD-0001 · E-004` (el mismo en todas las piezas del embarque) | hasta 7 mm |
+| 25 | **Code 128 de la N/S**, centrado, con 2.5 mm de zona blanca a cada lado | 17 mm de alto, módulo 0.25 mm (2 dots); 0.125 mm si la N/S es muy larga |
+| 42.75 | la misma N/S en texto (línea de interpretación), por si hay que escribirla a mano | 2–3.5 mm |
 
-Los logos (`public/images/upper_logo1.png` y `Euroquip4.png`) se convierten en `LogoMonocromo`: se recorta el margen blanco del archivo, se escalan con **una sola escala** (proporción intacta) y se pasan a 1 bit. La impresora térmica no tiene color: todo trazo de color (rojo, naranja, azul, verde) se imprime negro y el fondo queda sin imprimir. En el ZPL van como `^GFA`; la conversión se guarda en caché y se regenera sola si cambia el archivo.
+- **El código de barras codifica la N/S exacta**, tal como quedó registrada: al leerlo con la handheld (DataWedge en modo teclado) se obtiene esa N/S, sin prefijos (`TAR-`), sin el SKU ni el número de embarque. Es la misma simbología **Code 128** (`^BC`, modo automático `A`) que la etiqueta anterior usaba en su pie, así que no cambia la configuración del escáner.
+- `^`, `~` y `\` dentro de la N/S van con `^FH` (`E`, `E`, `C`): la impresora los decodifica y el código de barras sigue siendo la N/S exacta.
+- Code 128 solo admite ASCII imprimible. Una N/S con otros caracteres (p. ej. `Ñ`) no se puede codificar fielmente: la etiqueta muestra la N/S en texto grande y la leyenda `N/S · SIN CÓDIGO DE BARRAS`.
+- **Sin** logos, QR, fecha, destino, cantidad, descripción ni número de tarima. El tamaño (75 × 50 mm), la orientación (`^PON`), el tipo de papel, `^PW`/`^LL`/`^LT` y el mecanismo de envío (Browser Print o Web Bluetooth) no cambiaron.
+- Varias piezas = varias etiquetas en un solo envío (`^XA…^XZ` por pieza). La URL del ZPL y la de confirmación llevan los ids de las piezas elegidas (`?piezas=12,15`), así se marca como impreso exactamente lo que salió.
 
-**Tarima de SKU padre (QR)** — `EtiquetaPadreQr`: datos a la izquierda (44 mm), QR a la derecha (34.5 mm con su zona blanca).
+**Qué piezas se imprimen.** `numeros_serie.etiqueta_impresa_at` marca las piezas que ya tienen etiqueta. La página de etiquetas prepara por omisión **solo las que faltan** (al seguir escaneando no se reimprimen las ya pegadas); también permite **todas** o **una sola** (si una etiqueta se dañó). El embarque se puede **guardar** cuando ninguna pieza con N/S está sin etiqueta. Si una pieza se mueve a otro embarque, su etiqueta (que trae el número anterior) vuelve a quedar pendiente y su embarque destino queda en «Reimprimir» hasta imprimirla.
 
-| mm desde arriba | Columna izquierda | Tamaño |
-|---|---|---|
-| 7.75 | bloque negro con `TARIMA 12` en blanco | 5 mm |
-| 13.5 | `SKU` + valor (uno grande; dos en una línea; 3+ → primero y "+ N SKUs más") | 5.5 mm, baja hasta 2.5 mm si es largo |
-| ~21.5 | descripción | 2.25 mm |
-| ~24.75 | `DESTINO` / `FECHA` | rótulo 2 mm + valor 2.75 mm |
-| ~30.75 | `N/S · DETALLE EN EL QR`: primera N/S y cuántas más (`SN-000124 +33`) | rótulo 2 mm + valor 2.75 mm |
-| ~36.75 | `SKUS PADRE` / `TOTAL N/S` | rótulo 2 mm + valor 2.75 mm |
-
-**QR**: corrección M, zona blanca de 3 módulos, centrado en su columna con ≈ 5 mm de aire alrededor. El comando `^BQ` de Zebra imprime el QR unos puntos más abajo que su `^FO`; el ZPL lo sube `ZEBRA_AJUSTE_QR_MM` (1.5 mm por defecto) para que quede donde lo muestra la vista previa. Módulo de **0.5 mm (4 dots) → QR de ≈ 24.5 mm** (26.5 mm si la URL pasa de ~150 caracteres).
-
-**Tarima de SKUs sueltos o mixta (listado)** — `EtiquetaListado`: bloque `TARIMA 12 (1/2)` y a su derecha `DESTINO`, `FECHA`, `PIEZAS`; columnas `# | SKU | N/S | DESCRIPCIÓN`, **9 renglones por etiqueta** (texto 2.5 mm, renglón 2.875 mm), paginado `(1/N)` y el mismo pie.
-
-En horizontal vuelve a caber la **descripción** en el listado (recortada con "…" si es larga; completa en Excel y en el historial). A cambio caben 9 renglones por etiqueta en lugar de 13.
-
-El QR conserva **exactamente** el mismo destino (`tarimas.publico`, URL firmada).
+Diseños anteriores retirados: `EtiquetaPadreQr` (tarima con QR) y `EtiquetaListado` (listado paginado). Las etiquetas de tarima ya pegadas siguen funcionando en el andén: `TAR-{id}|fecha`, el QR (`/t/{uuid}`) y `T-004` se reconocen. La consulta firmada `/t/{uuid}` sigue existiendo y ahora se abre desde **Historial → Ver piezas**.
 
 ---
 
 ## 5. Configuración de la impresora (una sola vez)
+
+Lo más rápido: en la aplicación, **Etiqueta → Etiqueta de prueba y calibración** (`/impresion/prueba`) → elegir la impresora → **Calibrar papel de la impresora** → **Imprimir etiqueta de prueba**. Eso guarda en la ZQ620 el tamaño configurado (`^JUS`) y calibra el sensor (`~JC`).
 
 Con **Zebra Printer Setup Utility** (Android/iOS) o **Zebra Setup Utilities** (Windows):
 
@@ -230,11 +224,11 @@ No hace falta emparejarla en *Configuración de Windows*: Web Bluetooth usa su p
 
 ## 7. Seguridad
 
-- El navegador **solo** envía el ZPL que genera el servidor para esa tarima (`GET /tarimas/{uuid}/etiqueta.zpl`, con sesión y la Policy de la tarima). No existe ningún endpoint que acepte ZPL del navegador.
+- El navegador **solo** envía el ZPL que genera el servidor para las piezas de ese embarque (`GET /tarimas/{uuid}/etiqueta.zpl?piezas=…`, con sesión y la Policy del embarque; los ids de otro embarque se ignoran). No existe ningún endpoint que acepte ZPL del navegador.
 - Todo texto variable va con `^FH` (hexadecimal): un SKU con `^`, `~` o `\` no puede inyectar comandos.
 - **Browser Print** solo atiende sitios aceptados (*Accepted Hosts*) y escucha en `localhost`, no expuesto a la red.
 - **Web Bluetooth** exige HTTPS y que el usuario elija la impresora; una página no puede conectarse en silencio.
-- La marca "impresa" (que habilita *Guardar*) se registra **solo cuando el usuario confirma** que la etiqueta física salió bien.
+- La marca "impresa" de cada pieza (que habilita *Guardar* cuando no falta ninguna) se registra **solo cuando el usuario confirma** que las etiquetas físicas salieron bien.
 - El endpoint de diagnóstico exige sesión, valida longitudes y tiene límite de 30 solicitudes por minuto.
 
 ---
@@ -243,16 +237,15 @@ No hace falta emparejarla en *Configuración de Windows*: Web Bluetooth usa su p
 
 | # | Prueba | Resultado esperado |
 |---|---|---|
-| 1 | Imprimir tarima de SKU padre desde Windows + Chrome (BLE) | Selector → ZQ620 → etiqueta horizontal de 75×50 mm, sin cortes; logos a los lados |
+| 1 | Imprimir las etiquetas de un embarque con 3 piezas desde Windows + Chrome (BLE) | Selector → ZQ620 → **3 etiquetas** de 75×50 mm, sin cortes, cada una con su modelo, el número de embarque y su código de barras |
 | 2 | Lo mismo desde Android con Browser Print | Imprime sin selector, usando la impresora predeterminada |
-| 3 | Desde handheld: escanear SKU y N/S con el gatillo, luego imprimir | Captura con Enter automático; etiqueta correcta |
+| 3 | Desde handheld: escanear una N/S, imprimir su etiqueta, volver y escanear otra | Solo sale la etiqueta de la pieza nueva; el contador «sin imprimir» baja a 0 |
 | 4 | Medir la etiqueta impresa | 75 × 50 mm; nada a menos de 3.5 mm de los lados ni de 2 mm arriba/abajo |
-| 5 | Escanear el QR con celular y con handheld | Abre `/t/{uuid}?signature=…` con el detalle de N/S |
-| 6 | Leer el Code128 con el handheld | Lee `TAR-{n}|{AAAAMMDD}` |
-| 7a | Comparar la posición del QR impresa con la vista previa | Si queda bajo, subir `ZEBRA_AJUSTE_QR_MM` (p. ej. 2); si queda alto, bajarlo |
-| 7 | SKU de 30 caracteres | Se reduce la fuente o se recorta con "…"; nada sale del área |
-| 8 | Tarima con 30 SKUs sueltos | 3 etiquetas `(1/3)…(3/3)`, 13 renglones cada una |
-| 9 | Caracteres especiales en SKU/N/S (`Ñ`, `é`, `^`, `~`, `\`) | Se imprimen literalmente; no se corta el formato |
+| 5 | Leer el código de barras de cada etiqueta con la handheld (en un campo de texto y en Tráileres → Cargar) | Se escribe **exactamente** la N/S de la pieza; en el andén carga esa pieza |
+| 6 | N/S larga (20+ caracteres) y N/S con guiones o ceros a la izquierda | Se lee igual que la registrada, sin perder ceros ni guiones |
+| 7 | Modelo de 30 caracteres | Se reduce la fuente o se recorta con "…"; nada sale del área |
+| 8 | Reimprimir una sola pieza desde Etiquetas → «Reimprimir una pieza» | Sale solo esa etiqueta, idéntica a la anterior |
+| 9 | Caracteres especiales en modelo/N/S (`Ñ`, `é`, `^`, `~`, `\`) | Se imprimen literalmente; no se corta el formato; una N/S con `Ñ` sale en texto, sin código de barras |
 | 10 | Imprimir dos veces seguidas por BLE | La segunda no vuelve a pedir la impresora (misma página) |
 | 11 | Apagar la impresora y presionar Imprimir | Mensaje: no se pudo conectar…; registro en `impresion-*.log` |
 | 12 | Alejarse fuera de alcance durante el envío | Mensaje de conexión; al volver, **Imprimir** reconecta |
@@ -261,15 +254,75 @@ No hace falta emparejarla en *Configuración de Windows*: Web Bluetooth usa su p
 | 15 | Browser Print cerrado en Android | Cae a Web Bluetooth (selector); si no hay BLE, mensaje de impresora no encontrada |
 | 16 | Abrir la etiqueta en iPhone | Mensaje de dispositivo no compatible |
 | 17 | Responder "No, imprimir de nuevo" | No se registra la impresión; *Guardar* sigue deshabilitado |
-| 18 | Responder "Sí, se imprimió bien" | *Guardar* se habilita en la vista de escaneo |
+| 18 | Responder "Sí, se imprimió bien" | Si ya no falta ninguna pieza, *Guardar* se habilita en la vista de escaneo; si faltan, dice cuántas |
 | 19 | Papel agotado | La etiqueta no sale; el usuario responde "No" y no se registra |
 | 20 | Otro sitio web intenta imprimir con Browser Print | Browser Print lo bloquea hasta que se acepte |
 
-Pruebas automatizadas: `php artisan test` (`tests/Feature/EtiquetaZq620Test.php` valida 400×600 dots, que ningún elemento salga del área, el tamaño del QR, la paginación, el escape de caracteres y el diagnóstico).
+Pruebas automatizadas: `php artisan test` (`tests/Feature/EtiquetaZq620Test.php` valida 400×600 dots, una etiqueta por pieza, que solo lleve modelo, número de embarque y código de barras de la N/S exacta, que nada salga del área ni se encime, el escape de caracteres y el diagnóstico; `EmbarquePorPiezaTest` y `EtiquetaYExportacionTest`, el flujo de impresión por pieza).
+
+---
+
+## 9. Diagnóstico de campo (2026-10-12): selector que se congela y etiqueta cortada
+
+Se reportaron dos fallas **solo en celular y handheld** (en computadora todo sale bien). Tienen causas distintas.
+
+### 9.1 «Aparece la lista de impresoras pero no deja elegir»
+
+| Causa encontrada en el código | Efecto | Corrección |
+|---|---|---|
+| El selector (`requestDevice`) se abría **después** de esperar la búsqueda de Browser Print (hasta 2 s) y `getDevices()`. Chrome solo permite abrir el selector durante unos segundos tras un toque. | Con red o equipo lentos, el selector fallaba o quedaba en un estado inconsistente. | Browser Print se busca **al cargar la página**; el selector se abre en la primera línea del toque, sin esperas antes. Elegir impresora es un botón aparte («Elegir impresora Bluetooth»). |
+| Al vencer el tiempo de `gatt.connect()` la pantalla decía «sin respuesta», pero la conexión **seguía pendiente** en Chrome. | El siguiente intento se encolaba detrás del anterior: la interfaz parecía congelada. | Al vencer el tiempo o al tocar **Cancelar** se llama a `gatt.disconnect()`, que aborta la conexión pendiente. |
+| «Buscar impresora» e «Imprimir» podían correr a la vez. | Dos selectores o dos conexiones simultáneas. | Una sola operación a la vez; todos los botones se bloquean y aparece una barra de progreso con **Cancelar**. |
+| Errores del selector sin distinguir. | Mensaje genérico. | Mensajes por causa: selector cancelado, Bluetooth apagado, selector bloqueado por el navegador, sin soporte, tiempo agotado. |
+
+Causas del **equipo** que el código no puede corregir y hay que revisar en el handheld:
+
+- **Permisos de Chrome**: Android 12+ pide *Dispositivos cercanos*; Android 11 o anterior pide *Ubicación* **y** tener la ubicación del sistema encendida para buscar BLE. Sin ellos la lista sale vacía o no responde.
+- **Otra app conectada**: si Printer Setup Utility, Browser Print u otra app tiene abierta la conexión con la ZQ620, Chrome no puede conectarse. Cerrarla.
+- **BLE apagado en la impresora**: `bluetooth.le.controller_mode` debe ser `both` o `le`.
+- **[VERIFICAR EN EQUIPO]** El modelo informado «TC720L» no aparece en la documentación pública de Zebra consultada (sí TC72/TC77). Confirmar el modelo y la versión de Android en *Ajustes → Acerca del teléfono* y la versión de Chrome en *chrome://version*.
+
+### 9.2 «Imprimió solo un tercio de la etiqueta y empezó muy abajo»
+
+| Causa posible | Cómo se reconoce | Corrección |
+|---|---|---|
+| **Papel sin calibrar o con un largo guardado distinto** (otro rollo u otra app dejó `^LL`, `^LT` o modo continuo). La impresora no sabe dónde empieza la etiqueta y arranca a la mitad. | Contenido corrido hacia abajo, cortado o repartido en dos etiquetas. | Cada etiqueta ahora fija `^MTD ^MNY ^PW576 ^LL400 ^LH0,0 ^LT0 ^LS0`. Además: **Calibrar papel** en `/impresion/prueba` (o en Printer Setup). |
+| **Impresión con el navegador en Android** («Imprimir con el navegador»): pasa por el servicio de impresión de Android, que impone su tamaño de hoja (carta/A4 o 4×6") y escala la página. | Etiqueta pequeña, corrida o cortada; en computadora con controlador Zebra sale bien. | En Android ese botón ahora advierte antes de imprimir. La impresión del navegador se rehízo: copia solo la etiqueta directo del `<body>` (antes el resto de la página, oculto con `visibility:hidden`, seguía ocupando lugar y empujaba la etiqueta hacia abajo). |
+| **Envío BLE cortado a la mitad** y reintento: la impresora tenía medio formato en memoria y lo mezcló con el siguiente. | Etiqueta parcial tras un error de conexión. | Si un envío se corta, el siguiente empieza con `~JA` (borra lo incompleto). Progreso visible durante el envío. |
+
+No se cambió el tamaño de la etiqueta: sigue siendo **75 × 50 mm, 203 dpi, cabezal de 72 mm (576 × 400 dots)**, verificado en `config/etiquetas.php` y `.env`.
+
+### 9.3 Etiqueta de prueba
+
+`/impresion/prueba` imprime un marco exactamente en el borde del área imprimible, «ARRIBA» y «ABAJO», una regla cada 5 mm, texto pequeño, código de barras y QR. Al revisarla:
+
+1. Los **cuatro bordes** completos → el papel está bien calibrado.
+2. «ARRIBA» pegado al borde superior → el origen es correcto.
+3. Una sola etiqueta, sin pasar a la siguiente → el largo coincide.
+4. Se lee el texto pequeño y se escanean el código de barras y el QR → legibilidad correcta.
+
+Si después de calibrar la etiqueta sale completa pero un poco alta o baja, se ajusta `ZEBRA_AJUSTE_SUPERIOR_MM` en `.env` (negativo sube, positivo baja; máximo ±15 mm).
+
+---
+
+## 10. Impresora registrada por MAC (2026-10-12)
+
+Tabla `impresoras` (nombre, **MAC** única normalizada `AA:BB:CC:DD:EE:FF`, nombre Bluetooth, ubicación, activa), administrada en **Admin → Impresoras**. Cada equipo elige la suya en el panel de impresión y se recuerda en el navegador de ese equipo (`localStorage`).
+
+| Camino | Cómo usa el registro |
+|---|---|
+| **Browser Print** (Bluetooth Clásico) | Consulta `available` y `default`, y busca la MAC en los datos de cada impresora (sin suponer el campo). Si la encuentra, imprime ahí aunque la predeterminada sea otra. Si Browser Print no la lista, intenta enviar a un dispositivo armado con la MAC; si lo rechaza, pide descubrirla en la app. |
+| **Web Bluetooth** (BLE, Chrome) | Chrome no expone la MAC: el selector se filtra por el **nombre Bluetooth** registrado, así solo aparece esa impresora. |
+
+**[EN EQUIPO]** Zebra no documenta públicamente en qué campo de Browser Print viene la MAC de una impresora Bluetooth (se espera en `uid`). El botón **«Ver impresoras que detecta Browser Print»** muestra los datos reales y los manda a `storage/logs/impresion-*.log` (etapa `inventario`), para confirmarlo en el primer uso.
+
+Según el foro de desarrolladores de Zebra, Browser Print para Android solo usa Bluetooth Clásico; la impresora necesita `bluetooth.enable` y `bluetooth.discoverable` en `on`, y `bluetooth.le.controller_mode` en `both` o `classic`.
 
 ---
 
 ## Fuentes
+
+- [Zebra Developer Portal — ZD420 no aparece en Browser Print Android por Bluetooth (ajustes bluetooth.*)](https://developer.zebra.com/forum/25994)
 
 - [Zebra ZQ600 Series — hoja técnica](https://www.zebra.com/content/dam/zebra_dam/en/spec-sheets/zq610-zq620-zq630-spec-sheet-en-us.pdf)
 - [Zebra Browser Print — soporte](https://www.zebra.com/us/en/support-downloads/software/printer-software/browser-print.html)

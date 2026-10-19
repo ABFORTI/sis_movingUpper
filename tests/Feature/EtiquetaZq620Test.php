@@ -3,39 +3,41 @@
 namespace Tests\Feature;
 
 use App\Models\Tarima;
-use App\Services\Etiquetas\EtiquetaListado;
 use App\Services\Etiquetas\EtiquetaService;
 use App\Services\Etiquetas\Lienzo;
-use App\Services\TarimaService;
 use Illuminate\Support\Facades\Log;
 use Tests\Feature\Concerns\PreparaWms;
 use Tests\TestCase;
 
-/** Formato físico horizontal 75 × 50 mm a 203 dpi (Zebra ZQ620): 600 × 400 dots, cabezal de 576 dots. */
+/**
+ * Etiqueta por pieza en el formato físico de siempre: horizontal 75 × 50 mm a
+ * 203 dpi (Zebra ZQ620), 600 × 400 dots, cabezal de 576 dots. Solo lleva el
+ * modelo, el número de embarque y el código de barras (Code 128) de la N/S.
+ */
 class EtiquetaZq620Test extends TestCase {
     use PreparaWms;
 
-    private function tarimaPadre(int $numerosSerie = 3, string $sku = '2364F'): Tarima {
-        $operador = $this->operador();
+    private ?\App\Models\User $op = null;
+
+    /** @param list<string> $series */
+    private function embarque(array $series = ['SN-1', 'SN-2', 'SN-3'], string $sku = '2364F', ?string $modelo = null): Tarima {
+        $operador = $this->op ??= $this->operador();
         $tarima = $this->tarima($operador);
+        if ($modelo !== null) {
+            $this->enInventario(array_map(fn ($ns) => ['sku' => $sku, 'modelo' => $modelo, 'numero_serie' => $ns], $series));
+        }
+        $this->actingAs($operador)->post(route('escaneo.padre.cerrar'));
         $this->activarPadre($operador, $tarima, $sku);
-        foreach (range(1, $numerosSerie) as $i) {
-            $this->post(route('escaneo.ns'), ['numero_serie' => "SN-{$sku}-{$i}"]);
+        foreach ($series as $ns) {
+            $this->escanearNs($ns, agregarAlInventario: $modelo === null)->assertSessionHasNoErrors();
         }
 
         return $tarima;
     }
 
-    private function tarimaListado(int $piezas): Tarima {
-        $operador = $this->operador();
-        $tarima = $this->tarima($operador);
-        foreach (range(1, $piezas) as $i) {
-            $this->actingAs($operador)->post(route('escaneo.simple'), [
-                'sku' => "SKU-{$i}", 'descripcion' => 'Caja', 'destino_id' => $this->destino()->id, 'tarima' => $tarima->uuid,
-            ]);
-        }
-
-        return $tarima;
+    /** @return list<string> textos de la etiqueta, en orden */
+    private function textos(Lienzo $lienzo): array {
+        return collect($lienzo->elementos())->where('tipo', 'texto')->pluck('texto')->values()->all();
     }
 
     /**
@@ -60,16 +62,10 @@ class EtiquetaZq620Test extends TestCase {
         }
     }
 
-    /** Ningún elemento debe encimarse con otro (salvo el texto invertido sobre su recuadro). */
+    /** Ningún elemento debe encimarse con otro. */
     private function assertSinEncimarse(Lienzo $lienzo): void {
         $cajas = collect($lienzo->elementos())
-            ->reject(fn ($e) => $e['tipo'] === 'recuadro' || ($e['invertido'] ?? false))
-            ->map(fn ($e) => [
-                $e['x'], $e['y'],
-                $e['x'] + ($e['lado'] ?? $e['ancho']),
-                $e['y'] + ($e['lado'] ?? $e['alto'] ?? $e['grosor']),
-                $e['texto'] ?? $e['tipo'],
-            ])
+            ->map(fn ($e) => [$e['x'], $e['y'], $e['x'] + ($e['lado'] ?? $e['ancho']), $e['y'] + ($e['lado'] ?? $e['alto'] ?? $e['grosor']), $e['texto'] ?? $e['tipo']])
             ->values();
         foreach ($cajas as $i => $a) {
             foreach ($cajas->slice($i + 1) as $b) {
@@ -79,136 +75,129 @@ class EtiquetaZq620Test extends TestCase {
         }
     }
 
-    public function test_zpl_define_el_tamano_fisico_y_el_papel(): void {
-        $zpl = $this->get(route('etiquetas.zpl', $this->tarimaPadre()))->assertOk()->getContent();
+    public function test_zpl_conserva_el_tamano_fisico_y_el_papel(): void {
+        $zpl = $this->get(route('etiquetas.zpl', $this->embarque()))->assertOk()->getContent();
 
         $this->assertStringContainsString('^PW576', $zpl);   // 72 mm que imprime el cabezal (papel de 75 mm)
         $this->assertStringContainsString('^LL400', $zpl);   // 50 mm × 8 dots/mm
         $this->assertStringContainsString('^MNY', $zpl);     // etiqueta troquelada (gap)
         $this->assertStringContainsString('^CI28', $zpl);    // UTF-8
+        $this->assertStringContainsString('^PON', $zpl);     // misma orientación
     }
 
     public function test_etiqueta_es_horizontal_de_75x50(): void {
-        $f = app(EtiquetaService::class)->paginas($this->tarimaPadre())[0]->formato;
+        $f = app(EtiquetaService::class)->paginas($this->embarque())[0]->formato;
 
         $this->assertSame(600, $f->ancho);
         $this->assertSame(400, $f->alto);
-        $this->assertGreaterThan($f->alto, $f->ancho);
         $this->assertSame('75 × 50 mm', $f->medidas());
     }
 
-    public function test_etiqueta_padre_cabe_en_75x50_con_qr_legible(): void {
-        $paginas = app(EtiquetaService::class)->paginas($this->tarimaPadre());
+    public function test_una_etiqueta_por_pieza_dentro_del_area_y_sin_encimarse(): void {
+        $tarima = $this->embarque(['SN-1', 'SN-2', 'SN-3']);
 
-        $this->assertCount(1, $paginas);
-        $this->assertDentroDelArea($paginas[0]);
-        $this->assertSinEncimarse($paginas[0]);
-
-        $qr = collect($paginas[0]->elementos())->firstWhere('tipo', 'qr');
-        // Módulo ≥ 4 dots (0.5 mm) y lado ≥ 24 mm: se lee con celular y con handheld.
-        $this->assertGreaterThanOrEqual(4, $qr['modulo']);
-        $this->assertGreaterThanOrEqual(24 * 8, $qr['lado']);
-    }
-
-    public function test_qr_conserva_el_mismo_destino_firmado(): void {
-        $tarima = $this->tarimaPadre();
-        $url = app(TarimaService::class)->urlDetalle($tarima);
-
-        $zpl = $this->get(route('etiquetas.zpl', $tarima))->getContent();
-
-        $this->assertStringContainsString('^FDMA,'.$url.'^FS', $zpl);
-    }
-
-    public function test_qr_se_sube_en_el_zpl_para_compensar_el_desfase_de_bq(): void {
-        config(['etiquetas.ajuste_qr_mm' => 1.5]);
-        $tarima = $this->tarimaPadre();
-        $qr = collect(app(EtiquetaService::class)->paginas($tarima)[0]->elementos())->firstWhere('tipo', 'qr');
-
-        $zpl = $this->get(route('etiquetas.zpl', $tarima))->getContent();
-
-        // 1.5 mm = 12 dots más arriba que en el diseño (la vista previa conserva la posición del diseño).
-        $this->assertStringContainsString(sprintf('^FO%d,%d^BQN', $qr['x'] - 12, $qr['y'] - 12), $zpl);
-    }
-
-    public function test_sku_largo_se_reduce_o_recorta_sin_salirse(): void {
-        $paginas = app(EtiquetaService::class)->paginas($this->tarimaPadre(1, str_repeat('X', 60)));
-
-        $this->assertDentroDelArea($paginas[0]);
-    }
-
-    public function test_varios_skus_padre_caben(): void {
-        $operador = $this->operador();
-        $tarima = $this->tarima($operador);
-        foreach (['SKU-A', 'SKU-B', 'SKU-C'] as $sku) {
-            $this->activarPadre($operador, $tarima, $sku);
-            $this->post(route('escaneo.ns'), ['numero_serie' => "N-{$sku}"]);
-            $this->post(route('escaneo.padre.cerrar'));
-        }
-
-        $pagina = app(EtiquetaService::class)->paginas($tarima)[0];
-        $this->assertDentroDelArea($pagina);
-        $this->assertTrue(collect($pagina->elementos())->contains(fn ($e) => ($e['texto'] ?? '') === '+ 2 SKUs más'));
-    }
-
-    public function test_listado_pagina_segun_lo_que_cabe_fisicamente(): void {
-        $capacidad = app(EtiquetaListado::class)->capacidad();
-        $this->assertSame(9, $capacidad);
-
-        $paginas = app(EtiquetaService::class)->paginas($this->tarimaListado(30));
-
-        $this->assertCount(4, $paginas);
+        $paginas = app(EtiquetaService::class)->paginas($tarima);
+        $this->assertCount(3, $paginas);
         foreach ($paginas as $pagina) {
             $this->assertDentroDelArea($pagina);
             $this->assertSinEncimarse($pagina);
         }
-        $this->assertTrue(collect($paginas[3]->elementos())->contains(fn ($e) => ($e['texto'] ?? '') === 'TARIMA 1 (4/4)'));
+
+        $zpl = $this->get(route('etiquetas.zpl', $tarima))->getContent();
+        $this->assertSame(3, substr_count($zpl, '^XA'));
+        $this->assertSame(3, substr_count($zpl, '^XZ'));
     }
 
-    public function test_logos_se_imprimen_sin_deformarse(): void {
-        $pagina = app(EtiquetaService::class)->paginas($this->tarimaPadre())[0];
-        $logos = collect($pagina->elementos())->where('tipo', 'imagen')->values();
+    public function test_solo_modelo_numero_de_embarque_y_codigo_de_barras_del_ns(): void {
+        $tarima = $this->embarque(['SN-000123'], 'REF-100', modelo: 'RF-2364F');
+        $pagina = app(EtiquetaService::class)->paginas($tarima)[0];
 
-        $this->assertCount(2, $logos);
-        // Proporción del trazo de cada archivo: upper_logo1 810×178, Euroquip4 1202×235.
-        foreach ([810 / 178, 1202 / 235] as $i => $proporcion) {
-            $this->assertEqualsWithDelta($proporcion, $logos[$i]['ancho'] / $logos[$i]['alto'], 0.2);
-        }
-        // Uno a cada lado de la franja superior.
-        $this->assertSame($pagina->formato->margenX, $logos[0]['x']);
-        $this->assertSame($pagina->formato->limiteDerecho(), $logos[1]['x'] + $logos[1]['ancho']);
+        $this->assertSame(['MODELO', 'RF-2364F', 'EMBARQUE', 'MUD-0001 · E-001', 'SN-000123'], $this->textos($pagina));
+        $this->assertSame(['texto', 'barras'], collect($pagina->elementos())->pluck('tipo')->unique()->values()->all(), 'Sin logos, QR, recuadros ni líneas.');
 
-        $zpl = $this->get(route('etiquetas.zpl', Tarima::first()))->getContent();
-        $this->assertSame(2, substr_count($zpl, '^GFA,'));
-    }
-
-    public function test_codigo_de_barras_usa_modulo_legible(): void {
-        $pagina = app(EtiquetaService::class)->paginas($this->tarimaPadre())[0];
         $barras = collect($pagina->elementos())->firstWhere('tipo', 'barras');
+        $this->assertSame('SN-000123', $barras['dato'], 'El código de barras es la N/S exacta, sin prefijos.');
 
-        $this->assertSame(2, $barras['modulo']);   // 0.25 mm por módulo
-        $this->assertStringContainsString('^BY2^BCN', $this->get(route('etiquetas.zpl', Tarima::first()))->getContent());
+        $zpl = $this->get(route('etiquetas.zpl', $tarima))->getContent();
+        $this->assertStringContainsString('^BCN,136,N,N,N,A^FH\\^FDSN-000123^FS', $zpl);
+        $this->assertStringNotContainsString('^BQN', $zpl, 'Sin QR.');
+        $this->assertStringNotContainsString('TAR-', $zpl);
+        $this->assertStringNotContainsStringIgnoringCase('tarima', $zpl);
+        foreach (['REF-100', 'Bomba', 'Producto', 'Destino', 'Fecha', 'Piezas', 'Almacén'] as $sobra) {
+            $this->assertStringNotContainsString($sobra, $zpl, "La etiqueta no lleva «{$sobra}».");
+        }
+    }
+
+    public function test_el_modelo_sale_del_inventario_y_si_no_hay_se_usa_el_sku(): void {
+        // Con modelo en el inventario: el modelo; sin modelo: el SKU.
+        $conModelo = $this->embarque(['A-1'], 'REF-100', modelo: 'RF-2364F');
+        $sinModelo = $this->embarque(['B-1'], 'EST-200');
+
+        $this->assertSame('RF-2364F', $this->textos(app(EtiquetaService::class)->paginas($conModelo)[0])[1]);
+        $this->assertSame('EST-200', $this->textos(app(EtiquetaService::class)->paginas($sinModelo)[0])[1]);
+
+        // Una N/S registrada como incidencia (sin renglón) toma el modelo de su SKU en el inventario.
+        $this->post(route('escaneo.padre.cerrar'));
+        $this->activarPadre($this->op, $conModelo, 'REF-100');
+        $this->escanearNs('NO-INV', agregarAlInventario: false)->assertSessionHasNoErrors();
+        $textos = collect(app(EtiquetaService::class)->paginas($conModelo))->map(fn ($p) => $this->textos($p));
+        $this->assertSame(['RF-2364F', 'RF-2364F'], $textos->pluck(1)->all());
+        $this->assertSame(['A-1', 'NO-INV'], $textos->pluck(4)->all());
+    }
+
+    public function test_el_numero_de_embarque_es_el_mismo_en_todas_sus_piezas(): void {
+        $primero = $this->embarque(['P-1', 'P-2', 'P-3']);
+        $segundo = $this->embarque(['Q-1']);
+
+        $numeros = collect(app(EtiquetaService::class)->paginas($primero))->map(fn ($p) => $this->textos($p)[3])->unique();
+        $this->assertSame(['MUD-0001 · E-001'], $numeros->values()->all());
+        $this->assertSame('MUD-0001 · E-002', $this->textos(app(EtiquetaService::class)->paginas($segundo)[0])[3]);
+    }
+
+    public function test_codigo_de_barras_legible_y_ns_larga_sin_salirse(): void {
+        $pagina = app(EtiquetaService::class)->paginas($this->embarque(['SN-000123']))[0];
+        $barras = collect($pagina->elementos())->firstWhere('tipo', 'barras');
+        $this->assertSame(2, $barras['modulo']);                 // 0.25 mm por módulo
+        $this->assertSame(17 * 8, $barras['alto']);              // 17 mm de alto
+        $this->assertGreaterThanOrEqual(20, $barras['x'] - $pagina->formato->margenX, 'Zona blanca a la izquierda.');
+
+        $larga = app(EtiquetaService::class)->paginas($this->embarque([str_repeat('AB', 20)], 'OTRO'))[0];
+        $this->assertDentroDelArea($larga);
+        $this->assertSame(str_repeat('AB', 20), collect($larga->elementos())->firstWhere('tipo', 'barras')['dato']);
+    }
+
+    public function test_modelo_largo_se_reduce_o_recorta_sin_salirse(): void {
+        $pagina = app(EtiquetaService::class)->paginas($this->embarque(['L-1'], str_repeat('X', 60)))[0];
+
+        $this->assertDentroDelArea($pagina);
+        $this->assertSinEncimarse($pagina);
     }
 
     public function test_caracteres_especiales_no_rompen_el_zpl(): void {
-        $operador = $this->operador();
-        $tarima = $this->tarima($operador);
-        $this->actingAs($operador)->post(route('escaneo.simple'), [
-            'sku' => 'Ñu~^XZ\\é', 'destino_id' => $this->destino()->id, 'tarima' => $tarima->uuid,
-        ]);
+        $tarima = $this->embarque(['AB^XZ~\\1']);
 
         $zpl = $this->get(route('etiquetas.zpl', $tarima))->getContent();
 
         $this->assertSame(1, substr_count($zpl, '^XA'));
         $this->assertSame(1, substr_count($zpl, '^XZ'));
-        $this->assertStringContainsString('Ñu\\7E\\5EXZ\\5Cé', $zpl);
+        // Con ^FH la impresora decodifica \5E, \7E y \5C: el código de barras vuelve a ser la N/S exacta.
+        $this->assertStringContainsString('^FDAB\\5EXZ\\7E\\5C1^FS', $zpl);
+    }
+
+    public function test_ns_con_caracteres_fuera_de_code128_va_en_texto(): void {
+        $pagina = app(EtiquetaService::class)->paginas($this->embarque(['ÑU-1']))[0];
+
+        $this->assertNull(collect($pagina->elementos())->firstWhere('tipo', 'barras'));
+        $this->assertContains('ÑU-1', $this->textos($pagina));
+        $this->assertDentroDelArea($pagina);
     }
 
     public function test_vista_previa_es_el_mismo_diseno_a_escala_real(): void {
-        $tarima = $this->tarimaListado(20);
+        $tarima = $this->embarque(['V-1', 'V-2']);
 
         $html = $this->get(route('etiquetas.show', $tarima))->assertOk()->getContent();
 
-        $this->assertSame(3, substr_count($html, 'class="etiqueta-svg"'));   // 20 piezas, 9 por etiqueta
+        $this->assertSame(2, substr_count($html, 'class="etiqueta-svg"'));
         $this->assertStringContainsString('width="75mm" height="50mm"', $html);
         $this->assertStringContainsString('@page { size: 75mm 50mm', $html);
     }

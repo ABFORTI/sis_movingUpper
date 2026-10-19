@@ -11,30 +11,32 @@ use Tests\TestCase;
 class EscaneoTest extends TestCase {
     use PreparaWms;
 
-    public function test_flujo_modo_1_sku_padre_con_numeros_de_serie(): void {
+    public function test_flujo_sku_con_numeros_de_serie(): void {
         $operador = $this->operador();
         $tarima = $this->tarima($operador);
 
         $this->activarPadre($operador, $tarima);
-        $this->post(route('escaneo.ns'), ['numero_serie' => 'SN-001'])->assertSessionHasNoErrors();
-        $this->post(route('escaneo.ns'), ['numero_serie' => 'SN-002'])->assertSessionHasNoErrors();
+        $this->escanearNs('SN-001')->assertSessionHasNoErrors();
+        $this->escanearNs('SN-002')->assertSessionHasNoErrors();
 
         $registro = Registro::firstOrFail();
         $this->assertSame(TipoRegistro::Padre, $registro->tipo);
         $this->assertSame(['SN-001', 'SN-002'], $registro->numerosSerie->pluck('numero_serie')->all());
         $this->assertSame($operador->id, $registro->user_id);
+        $this->assertNull($registro->destino_id, 'La categoría ya no se captura.');
+        $this->assertSame('Bomba hidráulica', $registro->descripcion, 'La descripción sale del inventario.');
 
-        $this->get(route('wms'))->assertOk()->assertSee('SN-002')->assertSee('SKU activo');
+        $this->get(route('wms'))->assertOk()->assertSee('SN-002')->assertSee('SKU activo')
+            ->assertDontSee('Categoría')->assertDontSee('Solo SKUs');
     }
 
-    public function test_no_se_puede_abrir_otro_padre_sin_cerrar_el_activo(): void {
+    public function test_no_se_puede_abrir_otro_sku_sin_cerrar_el_activo(): void {
         $operador = $this->operador();
         $tarima = $this->tarima($operador);
         $this->activarPadre($operador, $tarima);
+        $this->skuEnInventario('OTRO');
 
-        $this->post(route('escaneo.padre'), [
-            'sku' => 'OTRO', 'destino_id' => $this->destino()->id, 'tarima' => $tarima->uuid,
-        ])->assertSessionHasErrors('sku');
+        $this->post(route('escaneo.padre'), ['sku' => 'OTRO', 'tarima' => $tarima->uuid])->assertSessionHasErrors('sku');
 
         $this->post(route('escaneo.padre.cerrar'));
         $this->activarPadre($operador, $tarima, 'OTRO');
@@ -44,45 +46,51 @@ class EscaneoTest extends TestCase {
     public function test_numero_de_serie_es_unico_en_todo_el_sistema(): void {
         $operador = $this->operador();
         $this->activarPadre($operador, $this->tarima($operador), 'SKU-A');
-        $this->post(route('escaneo.ns'), ['numero_serie' => 'SN-999']);
+        $this->escanearNs('SN-999');
         $this->post(route('escaneo.padre.cerrar'));
 
         $this->activarPadre($operador, $this->tarima($operador), 'SKU-B');
-        $this->post(route('escaneo.ns'), ['numero_serie' => 'SN-999'])->assertSessionHasErrors('numero_serie');
+        $this->escanearNs('SN-999')->assertSessionHasErrors('numero_serie');
 
         $this->assertSame(1, NumeroSerie::count());
     }
 
-    public function test_sku_no_se_repite_en_la_misma_tarima(): void {
+    public function test_volver_a_escanear_la_misma_ns_en_el_mismo_sku_no_duplica(): void {
         $operador = $this->operador();
-        $tarima = $this->tarima($operador);
-        $datos = ['sku' => 'SKU-10023', 'destino_id' => $this->destino()->id, 'tarima' => $tarima->uuid];
+        $this->activarPadre($operador, $this->tarima($operador));
+        $this->escanearNsJson('SN-1')->assertOk()->assertJsonPath('estado', 'registrada');
+        $this->escanearNsJson('SN-1')->assertOk()->assertJsonPath('estado', 'repetida');
 
-        $this->actingAs($operador)->post(route('escaneo.simple'), $datos)->assertSessionHasNoErrors();
-        $this->post(route('escaneo.simple'), $datos)->assertSessionHasErrors('sku');
-
-        $this->post(route('escaneo.simple'), ['tarima' => $this->tarima($operador)->uuid] + $datos)->assertSessionHasNoErrors();
+        $this->assertSame(1, NumeroSerie::count());
     }
 
-    public function test_agregar_ns_sin_padre_activo_falla(): void {
+    public function test_reabrir_el_mismo_sku_en_la_tarima_no_lo_duplica(): void {
+        $operador = $this->operador();
+        $tarima = $this->tarima($operador);
+        $this->activarPadre($operador, $tarima, 'SKU-10023');
+        $this->post(route('escaneo.padre.cerrar'));
+        $this->activarPadre($operador, $tarima, 'SKU-10023');
+
+        $this->assertSame(1, Registro::count());
+    }
+
+    public function test_agregar_ns_sin_sku_activo_falla(): void {
         $this->actingAs($this->operador())
-            ->post(route('escaneo.ns'), ['numero_serie' => 'SN-1'])
+            ->escanearNs('SN-1')
             ->assertSessionHasErrors('numero_serie');
     }
 
-    public function test_cambiar_de_modo_cierra_el_padre_activo(): void {
-        $operador = $this->operador();
-        $this->activarPadre($operador, $this->tarima($operador));
+    public function test_el_modo_solo_skus_ya_no_existe(): void {
+        $this->actingAs($this->operador());
 
-        $this->post(route('wms.modo'), ['modo' => 2])->assertSessionHas('warn');
-        $this->post(route('escaneo.ns'), ['numero_serie' => 'SN-1'])->assertSessionHasErrors('numero_serie');
+        $this->post('/escaneo/simple', ['sku' => 'X'])->assertNotFound();
+        $this->post('/modo', ['modo' => 2])->assertNotFound();
     }
 
     public function test_la_vista_escapa_el_contenido_escaneado(): void {
         $operador = $this->operador();
-        $this->actingAs($operador)->post(route('escaneo.simple'), [
-            'sku' => '<script>alert(1)</script>', 'destino_id' => $this->destino()->id, 'tarima' => $this->tarima($operador)->uuid,
-        ]);
+        $tarima = $this->tarima($operador);
+        $this->activarPadre($operador, $tarima, '<script>alert(1)</script>');
 
         $this->get(route('wms'))->assertDontSee('<script>alert(1)</script>', false);
     }

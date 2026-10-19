@@ -14,7 +14,7 @@
       <ul class="features">
         <li class="feature">
           <span class="feature-icon"><x-icon name="scan" /></span>
-          <div><strong>Escaneo continuo</strong><span>SKU y números de serie por tarima.</span></div>
+          <div><strong>Escaneo continuo</strong><span>SKU y números de serie por embarque.</span></div>
         </li>
         <li class="feature">
           <span class="feature-icon"><x-icon name="qr" /></span>
@@ -22,7 +22,7 @@
         </li>
         <li class="feature">
           <span class="feature-icon"><x-icon name="sheet" /></span>
-          <div><strong>Reportes en Excel</strong><span>Por tarima o de todo el inventario.</span></div>
+          <div><strong>Reportes en Excel</strong><span>Por embarque o de todo el inventario.</span></div>
         </li>
       </ul>
     </div>

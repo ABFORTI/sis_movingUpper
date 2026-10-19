@@ -61,7 +61,18 @@ class User extends Authenticatable {
         return $this->hasRole(Role::ADMIN);
     }
 
-    public function puedeVerTodasLasTarimas(): bool {
+    /** Todos ven todas las tarimas de la mudanza; operar las de otros es de admin y auditor. */
+    public function puedeTrabajarTodasLasTarimas(): bool {
+        return $this->hasRole(Role::ADMIN) || $this->hasRole(Role::AUDITOR);
+    }
+
+    /** Mover o retirar piezas de tarimas ya guardadas (con motivo). */
+    public function puedeCorregirTarimas(): bool {
+        return $this->hasRole(Role::ADMIN) || $this->hasRole(Role::AUDITOR);
+    }
+
+    /** Generar entregas al cliente y gestionar incidencias (asignar, cambiar estado, resolver). */
+    public function esSupervision(): bool {
         return $this->hasRole(Role::ADMIN) || $this->hasRole(Role::AUDITOR);
     }
 

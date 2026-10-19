@@ -14,7 +14,6 @@ class ManualRequest extends FormRequest {
         return (bool) $this->user()?->isAdmin();
     }
 
-    /** Quita etiquetas, caracteres de control y espacios repetidos del nombre. */
     protected function prepareForValidation(): void {
         if (is_string($this->input('nombre'))) {
             $nombre = strip_tags($this->input('nombre'));
@@ -32,11 +31,11 @@ class ManualRequest extends FormRequest {
             'archivo' => [
                 $creando ? 'required' : 'nullable',
                 'file',
-                'extensions:pdf',                 // extensión que envía el navegador
-                'mimes:pdf',                      // tipo detectado por el contenido (finfo)
+                'extensions:pdf',
+                'mimes:pdf',   
                 'mimetypes:application/pdf',
                 'max:'.Manual::TAMANO_MAXIMO_KB,
-                $this->firmaPdf(...),             // los bytes iniciales deben ser %PDF-
+                $this->firmaPdf(...), 
             ],
         ];
     }

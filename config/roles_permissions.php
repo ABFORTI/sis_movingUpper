@@ -10,7 +10,7 @@ return [
         [
             'slug' => 'auditor',
             'name' => 'Auditor',
-            'description' => 'Trabaja igual que un operador, pero ve las tarimas y el historial de todos los usuarios.',
+            'description' => 'Escaneo, Historial (con correcciones), Incidencias, Tráileres, Inventarios y Reporte Diario de todos los usuarios; consulta los manuales publicados y crea y activa mudanzas. No administra usuarios, impresoras ni manuales.',
         ],
         [
             'slug' => 'operador',

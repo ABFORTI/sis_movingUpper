@@ -76,6 +76,7 @@
 
   --ease: cubic-bezier(.2, .8, .2, 1);
   --topbar-h: 64px;
+  --tabbar-h: 60px;
 }
 
 /* ---------- Base ---------- */
@@ -384,6 +385,7 @@ select.input {
 .badge-success { background: var(--success-50); color: var(--success-text); }
 .badge-success .dot { background: var(--success); }
 .badge-dark { background: var(--brand); color: #fff; }
+.badge-danger { background: var(--danger-50); color: var(--danger-text); }
 .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 .empty { text-align: center; padding: 44px 20px; }
@@ -572,9 +574,7 @@ select.input {
 }
 @media (max-width: 760px) {
   .topbar-inner { padding: 0 16px; gap: 12px; }
-  .user-meta, .nav-link span { display: none; }
-  .nav-link { padding: 0 11px; }
-  .nav-link.is-active::after { left: 8px; right: 8px; }
+  .user-meta { display: none; }
   .page { padding: 20px 16px 40px; }
   .flash { padding: 16px 16px 0; }
   .page-title { font-size: 24px; }
@@ -599,15 +599,24 @@ select.input {
   .table-stack td .chips { justify-content: flex-end; }
 }
 
+/* Imprimir con el navegador: impresion.js cuelga una copia de la etiqueta
+   directo del <body> (#raizImpresion) y se oculta todo lo demás con display:none,
+   para que nada empuje la etiqueta hacia abajo. Una etiqueta por hoja. */
+#raizImpresion { display: none; }
 @media print {
-  body * { visibility: hidden; }
-  #zonaImpresion, #zonaImpresion * { visibility: visible; }
-  #zonaImpresion { position: absolute; top: 0; left: 0; display: block; }
-  .preview-canvas { background: none; border: 0; padding: 0; }
-  .etiqueta-hoja { break-after: page; }
-  .etiqueta-hoja figcaption { display: none; }
-  .etiqueta-svg { box-shadow: none; border-radius: 0; }
+  html.imprimiendo, html.imprimiendo body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  html.imprimiendo body > *:not(#raizImpresion) { display: none !important; }
+  html.imprimiendo #raizImpresion { display: block; }
+  .hoja-impresion { break-after: page; page-break-after: always; overflow: hidden; }
+  .hoja-impresion:last-child { break-after: auto; page-break-after: auto; }
+  .hoja-impresion .etiqueta-svg { display: block; box-shadow: none; border-radius: 0; max-width: none; }
 }
+
+/* Panel de impresión */
+.impresion-progreso { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.impresion-progreso progress { flex: 1; height: 10px; accent-color: var(--brand); }
+.impresora-actual { font-size: 13px; color: var(--text-2); margin-bottom: 10px; overflow-wrap: anywhere; }
+.verify-lista { margin: 6px 0 8px 18px; font-size: 13px; color: var(--text-2); display: grid; gap: 2px; }
 
 /* ===== Guardar tarima e Historial ===== */
 .guardar-wrap { display: inline-flex; }
@@ -751,11 +760,7 @@ select.input {
 /* Handheld más angosto (320–400 px): barra superior solo con íconos. */
 @media (max-width: 400px) {
   .topbar-inner { padding: 0 12px; gap: 8px; }
-  .topbar .brand-name { display: none; }
-  .nav { gap: 0; }
-  .nav-link { padding: 0 9px; }
   .user-menu { gap: 8px; }
-  .topbar .avatar { display: none; }
   .public-top .badge { display: none; }
   .auth-mobile-brand .brand-company { height: 20px; }
 }
@@ -829,3 +834,419 @@ select.input {
   .table-stack td.cell-manual { display: block; text-align: left; padding-bottom: 8px; }
   .table-stack td.cell-manual::before { display: none; }
 }
+
+
+/* ===== Diálogo de motivo ===== */
+.dialog {
+  width: min(440px, calc(100vw - 24px)); padding: 0; border: 0; border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg); color: var(--text); background: var(--surface);
+}
+.dialog::backdrop { background: rgba(22, 19, 47, .45); }
+.dialog form { padding: 20px; }
+.dialog-title { font-size: 16px; font-weight: 600; line-height: 1.35; }
+.dialog-text { font-size: 13px; color: var(--text-3); margin-top: 4px; }
+.dialog-campo { height: auto; padding: 10px 14px; resize: vertical; margin-top: 6px; line-height: 1.4; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* ===== Escaneo ===== */
+/* El botón de teclado solo tiene sentido en pantallas táctiles. */
+.control-teclado { display: none; }
+.control-teclado.is-on { color: var(--brand); background: var(--brand-50); }
+.scan-estado { font-size: 13px; font-weight: 600; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid; overflow-wrap: anywhere; }
+.scan-estado[data-tipo="ok"] { background: var(--success-50); border-color: var(--success-200); color: var(--success-text); }
+.scan-estado[data-tipo="error"] { background: var(--danger-50); border-color: var(--danger-200); color: var(--danger-text); }
+.scan-flash-ok { animation: scan-ok .6s var(--ease); }
+.scan-flash-error { animation: scan-error .45s var(--ease); }
+@keyframes scan-ok { 0% { box-shadow: 0 0 0 4px rgba(109, 188, 69, .55); border-color: var(--success); } 100% { box-shadow: none; } }
+@keyframes scan-error { 0%, 50% { transform: translateX(-4px); } 25%, 75% { transform: translateX(4px); } 100% { transform: none; } }
+.chip-nuevo { animation: slide-in .3s var(--ease); background: var(--success-50); border-color: var(--success-200); color: var(--success-text); }
+
+@media (pointer: coarse) {
+  .control-teclado { display: grid; }
+  .control:has(.control-teclado) .kbd { display: none; }
+  .control:has(.control-teclado) .input { padding-right: 48px; }
+}
+
+/* ===== Handheld ===== */
+@media (max-width: 760px) {
+  .dialog-actions .btn { flex: 1; }
+}
+@media (max-width: 560px) {
+  /* El campo de escaneo es lo más importante de la pantalla. */
+  .input-lg { height: 54px; font-size: 18px; }
+  .stats { grid-template-columns: 1fr 1fr; }
+  .stat { padding: 10px 12px; }
+  .stat .tile { display: none; }
+  .stat-value { font-size: 19px; }
+  .active-sku { margin-top: 14px; }
+  .active-sku-count b { font-size: 32px; }
+  .pallet-title { font-size: 16px; }
+}
+
+/* App instalada: respeta la barra de gestos de Android. */
+@media (display-mode: standalone) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Handheld: el campo que se escanea y su resultado quedan siempre a la vista,
+   sin que el título, los contadores o la tarjeta del SKU activo los empujen
+   fuera de la pantalla. */
+@media (max-width: 560px) {
+  .page-head { flex-wrap: nowrap; }
+  .page-head > form { flex: 0 0 auto; }
+  .page-head > form .btn { flex: 0 0 auto; height: var(--h-sm); padding: 0 12px; font-size: 13px; }
+  .page-title { font-size: 20px; }
+
+  .stats { gap: 6px; margin-bottom: 12px; }
+  .stat { padding: 8px 12px; }
+  .stat > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; }
+  .stat-value { font-size: 17px; }
+
+  .card-captura .card-head { padding-top: 12px; }
+  .card-captura .card-desc { display: none; }
+  .card-captura .card-body { display: flex; flex-direction: column; padding-top: 12px; }
+  .card-captura .card-body > .divider { display: none; }
+  /* Con SKU padre activo: el campo de N/S sube justo debajo del modo. */
+  .card-captura .card-body:has(.active-sku) > * { order: 3; }
+  .card-captura .card-body:has(.active-sku) > .segmented { order: 0; }
+  .card-captura .card-body:has(.active-sku) > form[data-escaneo-ns] { order: 1; margin-top: 14px; }
+  .card-captura .card-body:has(.active-sku) > .active-sku { order: 2; }
+  /* Sin SKU padre activo, el campo de N/S deshabilitado solo estorba. */
+  .card-captura .card-body:not(:has(.active-sku)) > form[data-escaneo-ns] { display: none; }
+
+  /* "Vaciar" con borde para que no se vea suelto junto a los demás botones. */
+  .pallet-foot .btn-ghost { border-color: var(--border-strong); }
+}
+
+/* ===== Corregir tarima ===== */
+.table-partidas tr.is-marcada td { background: var(--success-50); }
+.table-partidas tr:has(.checkbox:checked) td { background: var(--brand-50); }
+@media (max-width: 760px) {
+  /* Cada pieza en una fila compacta: casilla a la izquierda, datos a la derecha. */
+  .table-partidas tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center; }
+  .table-partidas td { display: block; padding: 0; text-align: left; width: auto; }
+  .table-partidas td::before { display: none; }
+  .table-partidas td.c-check { grid-row: 1 / span 3; }
+  .table-partidas td:nth-child(2) { grid-column: 3; grid-row: 1; font-size: 12px; color: var(--text-3); }
+  .table-partidas td:nth-child(3) { grid-column: 2; grid-row: 1; }
+  .table-partidas td:nth-child(4) { grid-column: 2 / -1; font-weight: 600; }
+  .table-partidas td:nth-child(5) { grid-column: 2 / -1; font-size: 13px; color: var(--text-3); }
+}
+
+/* ===== Navegación =====
+   Computadora: secciones con texto y "Más" para administración.
+   Laptop chica / tablet: solo íconos (el nombre aparece al pasar el mouse).
+   Celular y handheld: pestañas abajo, al alcance del pulgar; lo demás en "Más". */
+.nav-contador {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-full); display: inline-grid; place-items: center;
+  font-size: 11px; font-weight: 700; background: var(--accent); color: #fff; line-height: 1;
+}
+.nav-solo-movil, .nav-mas-solo-movil { display: none; }
+.nav-mas { position: relative; }
+.nav-mas > summary { list-style: none; cursor: pointer; user-select: none; }
+.nav-mas > summary::-webkit-details-marker { display: none; }
+.nav-mas[open] > summary { color: var(--text); background: var(--surface-3); }
+.nav-mas-panel {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 50; min-width: 220px; padding: 6px;
+  display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); box-shadow: var(--shadow-lg); animation: slide-in .15s var(--ease);
+}
+.nav-mas-link {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-sm);
+  color: var(--text-2); font-weight: 500; font-size: 14px; white-space: nowrap;
+}
+.nav-mas-link:hover { background: var(--surface-3); color: var(--text); }
+.nav-mas-link.is-active { color: var(--brand); background: var(--brand-50); font-weight: 600; }
+.nav-mas-link .nav-contador { margin-left: auto; }
+.nav-mas-usuario { display: none; }
+.nav-mas-link.nav-solo-movil, .nav-contador.nav-solo-movil { display: none; }
+
+.mudanza-franja {
+  display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 16px;
+  font-size: 12.5px; font-weight: 600; border-top: 1px solid var(--border);
+  background: var(--accent-50); color: var(--warn-text);
+}
+.mudanza-franja.is-captura { background: var(--success-50); color: var(--success-text); }
+.mudanza-franja-texto { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 1320px) {
+  .topbar-inner { gap: 20px; }
+  .topbar .user-meta { display: none; }
+}
+@media (min-width: 761px) and (max-width: 1120px) {
+  .nav-texto { display: none; }
+  .nav-link { padding: 0 11px; }
+  .nav-link .nav-contador { position: absolute; top: 2px; right: 0; }
+}
+@media (max-width: 760px) {
+  body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+  .nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; gap: 0;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+    background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -4px 18px rgba(22, 19, 47, .07);
+  }
+  .nav > .nav-link, .nav-mas { flex: 1 1 0; min-width: 0; height: var(--tabbar-h); }
+  .nav .nav-link {
+    width: 100%; height: var(--tabbar-h); padding: 6px 2px 4px; flex-direction: column; justify-content: center; gap: 3px;
+    border-radius: 0; font-size: 11px; font-weight: 500; color: var(--text-3);
+  }
+  .nav .nav-link .icon { width: 22px; height: 22px; }
+  .nav .nav-texto { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .nav .nav-link.is-active { background: transparent; color: var(--brand); font-weight: 600; }
+  .nav .nav-link.is-active::after { top: 0; bottom: auto; left: 24%; right: 24%; border-radius: 0 0 3px 3px; }
+  .nav .nav-link .nav-contador { position: absolute; top: 5px; left: calc(50% + 4px); }
+  .nav-mas[open] > summary { background: var(--surface-2); }
+
+  .nav-solo-escritorio { display: none; }
+  .nav-mas-solo-movil { display: block; }
+  .nav-mas-link.nav-solo-movil { display: flex; }
+  .nav-contador.nav-solo-movil { display: inline-grid; }
+
+  /* "Más" se abre como hoja sobre las pestañas, con el usuario arriba. */
+  .nav-mas[open]::before { content: ''; position: fixed; inset: 0; z-index: -1; background: rgba(22, 19, 47, .38); }
+  .nav-mas-panel {
+    position: fixed; top: auto; left: 8px; right: 8px; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px);
+    max-height: 70vh; overflow-y: auto; padding: 8px; border-radius: var(--r-lg);
+  }
+  .nav-mas-link { padding: 14px 12px; font-size: 15px; }
+  .nav-mas-link .icon { width: 20px; height: 20px; }
+  .nav-mas-usuario {
+    display: flex; align-items: center; gap: 10px; padding: 6px 12px 12px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text);
+  }
+  .nav-mas-usuario small { display: block; font-size: 12px; color: var(--text-3); }
+}
+@media print {
+  .nav, .mudanza-franja { display: none !important; }
+}
+
+/* ===== Incidencias ===== */
+.incidencia-titulo { font-weight: 600; color: var(--text); }
+.incidencia-texto { margin-top: 16px; white-space: pre-line; color: var(--text-2); }
+.meta-item small { display: block; margin-top: 2px; }
+.inline-form { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.seguimiento { display: grid; gap: 20px; }
+.resolver { padding-top: 16px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
+.resolver .field { margin-top: 0; }
+.input-archivo { height: auto; padding: 8px; }
+.evidencias { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.evidencia { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: var(--r-md); color: var(--text-2); min-width: 0; }
+.evidencia:hover { border-color: var(--brand); }
+.evidencia img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; background: var(--surface-3); }
+.evidencia .tile { width: 100%; height: 110px; }
+.evidencia-nombre { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline { list-style: none; margin: 0; display: grid; gap: 14px; }
+.timeline-item { display: flex; gap: 12px; align-items: flex-start; }
+.timeline-item .tile { width: 30px; height: 30px; border-radius: 8px; }
+.timeline-meta { font-size: 12px; color: var(--text-3); }
+.timeline-texto { font-size: 14px; color: var(--text); white-space: pre-line; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .inline-form > .btn { width: 100%; }
+  .evidencias { grid-template-columns: 1fr 1fr; }
+  .table-stack td.cell-incidencia { display: block; text-align: left; }
+  .table-stack td.cell-incidencia::before { display: none; }
+}
+
+/* ===== Autorizaciones ===== */
+@media (max-width: 760px) {
+  /* Alcance: cada pieza en dos renglones (N/S y consecutivo; SKU, tarima y estado). */
+  .table-alcance tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; padding: 10px 16px; }
+  .table-alcance td { display: block; padding: 0; width: auto; text-align: left; }
+  .table-alcance td::before { display: none; }
+  .table-alcance td:nth-child(1) { grid-column: 2; grid-row: 1; font-size: 12px; color: var(--text-3); }
+  .table-alcance td:nth-child(2) { grid-column: 1; grid-row: 1; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+  .table-alcance td:nth-child(3), .table-alcance td:nth-child(4) { display: inline; grid-row: 2; font-size: 13px; }
+  .table-alcance td:nth-child(3) { grid-column: 1; }
+  .table-alcance td:nth-child(4) { grid-column: 2; text-align: right; color: var(--text-3); }
+  .table-alcance td:nth-child(5) { grid-column: 1 / -1; }
+  .table-alcance td.is-vacia { display: none; }
+}
+
+
+/* ===== Embarques ===== */
+.summary-card { cursor: pointer; list-style: none; padding-bottom: 18px; }
+.summary-card::-webkit-details-marker { display: none; }
+details.card[open] > .summary-card { padding-bottom: 0; }
+.lista-embarque { list-style: none; margin: 0; padding: 0; }
+.lista-embarque li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; border-top: 1px solid var(--border); }
+.lista-embarque li b { display: block; color: var(--text); font-size: 16px; }
+.lista-embarque li.is-recibida { background: var(--success-50); }
+@media (max-width: 760px) {
+  .lista-embarque li { padding: 10px 16px; }
+}
+
+/* ===== Andén: escaneo continuo (anden.js) ===== */
+/* Cada estado lleva icono y texto además del color: se entiende sin distinguir colores. */
+.anden-estado { display: flex; align-items: flex-start; gap: 12px; margin-top: 14px; padding: 14px 16px; border: 2px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
+.anden-estado-icono { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; font-weight: 700; background: var(--surface); border: 2px solid currentColor; }
+.anden-estado-titulo { font-size: 18px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.anden-estado-texto { font-size: 15px; margin-top: 2px; overflow-wrap: anywhere; }
+.anden-estado[data-tipo="ok"] { background: var(--success-50); border-color: var(--success-200); color: var(--success-text); }
+.anden-estado[data-tipo="repetido"] { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+.anden-estado[data-tipo="pendiente"], .anden-estado[data-tipo="no_esperada"] { background: var(--warn-50); border-color: var(--warn-200); color: var(--warn-text); }
+.anden-estado[data-tipo="error"] { background: var(--danger-50); border-color: var(--danger-200); color: var(--danger-text); }
+.anden-acciones { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.anden-acciones a { font-weight: 600; }
+.anden-pendientes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--warn-50); border: 1px dashed var(--warn-200); color: var(--warn-text); font-size: 14px; font-weight: 600; }
+.anden-pendientes span { flex: 1 1 200px; }
+.anden-log { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; }
+.anden-log li { display: grid; grid-template-columns: 22px auto 1fr; gap: 2px 8px; align-items: baseline; padding: 8px 10px; border-radius: var(--r-sm); border-left: 4px solid var(--border); background: var(--surface-2); font-size: 13px; }
+.anden-log-icono { font-weight: 700; }
+.anden-log-codigo { font-weight: 600; overflow-wrap: anywhere; }
+.anden-log-estado { justify-self: end; font-weight: 600; }
+.anden-log-texto { grid-column: 2 / -1; color: var(--text-2); overflow-wrap: anywhere; }
+.anden-log li[data-tipo="ok"] { border-left-color: var(--success-200); }
+.anden-log li[data-tipo="ok"] .anden-log-estado { color: var(--success-text); }
+.anden-log li[data-tipo="pendiente"], .anden-log li[data-tipo="no_esperada"] { border-left-color: var(--warn-200); }
+.anden-log li[data-tipo="pendiente"] .anden-log-estado, .anden-log li[data-tipo="no_esperada"] .anden-log-estado { color: var(--warn-text); }
+.anden-log li[data-tipo="error"] { border-left-color: var(--danger-200); }
+.anden-log li[data-tipo="error"] .anden-log-estado { color: var(--danger-text); }
+.anden-resaltar { animation: anden-resaltar 1.2s ease-out; }
+@keyframes anden-resaltar { from { background: var(--success-50); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .anden-resaltar { animation: none; } }
+
+/* ===== Anomalías por N/S antes de guardar ===== */
+.chip-anomalia { background: var(--warn-50); border-color: var(--warn-200); color: var(--warn-text); font-weight: 600; }
+/* "Editar números de serie": plegado por modelo; al abrirlo, lista con casillas y acciones táctiles. */
+.ns-editor { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 4px; }
+.ns-editor-toggle { cursor: pointer; list-style: none; font-size: 14px; font-weight: 600; color: var(--brand); min-height: 44px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ns-editor-toggle::-webkit-details-marker { display: none; }
+.ns-editor-toggle::after { content: "▾"; margin-left: auto; color: var(--text-3); transition: transform .15s; }
+.ns-editor[open] > .ns-editor-toggle::after { transform: rotate(180deg); }
+.ns-editor-body { display: grid; gap: 10px; padding-bottom: 4px; }
+.ns-editor-aviso { display: flex; gap: 6px; align-items: flex-start; margin: 0; }
+.ns-agregar { display: flex; gap: 8px; align-items: center; }
+.ns-agregar .control { flex: 1; min-width: 0; }
+.ns-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; }
+.ns-fila { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 2px 4px 2px 0; background: var(--surface); }
+.ns-fila.is-marcada { background: var(--warn-50); border-color: var(--warn-200); }
+.ns-fila-check { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 8px 10px; cursor: pointer; }
+.ns-fila-check input[type="checkbox"] { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+.ns-fila-texto { min-width: 0; overflow-wrap: anywhere; }
+.ns-fila-editar { flex: none; }
+.ns-fila-editar > summary { list-style: none; margin: 4px 0; }
+.ns-fila-editar > summary::-webkit-details-marker { display: none; }
+.ns-fila-editar[open] { flex-basis: 100%; }
+.ns-fila-editar[open] > summary { display: none; }
+.ns-fila-form { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; padding: 8px 10px 10px; border-top: 1px dashed var(--border); }
+.ns-fila-form .label { margin: 0; }
+.ns-fila-form .btn { grid-column: 1 / -1; justify-self: end; }
+.ns-acciones { display: grid; gap: 8px; }
+.ns-acciones-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ns-acciones-campos textarea { min-height: var(--h-md); resize: vertical; }
+.ns-acciones-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.line-parent > .line-desc { margin-top: 4px; }
+.chips-recientes { margin-top: 8px; }
+.anomalias-nota { display: block; font-size: 12px; color: var(--warn-text); margin-top: 2px; white-space: pre-line; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .ns-acciones-campos { grid-template-columns: 1fr; }
+  .ns-acciones-botones .btn { flex: 1 1 auto; }
+}
+.anomalias-resumen { margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--warn-text); }
+.impresoras-detectadas { margin: 8px 0 0; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+
+/* =====================================================================
+   Inventarios, selector de SKU, validación de N/S y pendientes de revisión
+   ===================================================================== */
+.nueva-tarima { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.nueva-tarima select.input { width: auto; min-width: 150px; }
+/* Historial: alcance del Excel de trabajo junto al botón. */
+[data-excel-alcance] select.input { width: auto; min-width: 140px; }
+@media (max-width: 560px) {
+  [data-excel-alcance] { width: 100%; }
+  [data-excel-alcance] select.input { flex: 1 1 120px; }
+}
+
+/* Selector de SKU (combobox) */
+[data-sku-selector] { position: relative; }
+.control .control-action[data-sku-abrir] { right: 6px; }
+.combo-lista {
+  position: absolute; z-index: 30; left: 0; right: 0; margin: 4px 0 0; padding: 4px; list-style: none;
+  max-height: min(320px, 50vh); overflow-y: auto; background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+}
+.combo-lista [role="option"] {
+  display: grid; gap: 2px; min-height: 44px; padding: 8px 10px; border-radius: var(--r-sm); cursor: pointer;
+}
+.combo-lista [role="option"][aria-selected="true"], .combo-lista [role="option"]:hover { background: var(--brand-50); }
+.combo-sku { font-weight: 600; color: var(--brand); overflow-wrap: anywhere; }
+.combo-texto { font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.hint[data-tipo="error"] { color: var(--danger-text); font-weight: 600; }
+.hint[data-tipo="ok"] { color: var(--success-text); }
+.input-derivado { background: var(--surface-3); color: var(--text-2); cursor: default; }
+.input-derivado:focus { box-shadow: none; }
+.active-sku-desc { font-size: 13px; color: var(--text-2); margin: -4px 0 10px; padding-right: 64px; overflow-wrap: anywhere; }
+
+/* Captura manual / fotografía (pendiente) */
+.captura-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.captura-opcion {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; text-align: left;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-md); color: var(--text);
+}
+.captura-opcion span { display: grid; min-width: 0; }
+.captura-opcion b { font-size: 13px; }
+.captura-opcion small { font-size: 11.5px; color: var(--text-3); }
+.captura-opcion:not(:disabled):hover { border-color: var(--brand); color: var(--brand); }
+.captura-opcion:disabled { cursor: not-allowed; opacity: .6; }
+.captura-opcion.is-pendiente { border-style: dashed; background: var(--surface-2); opacity: 1; color: var(--text-3); }
+@media (max-width: 380px) { .captura-opciones { grid-template-columns: 1fr; } }
+
+/* Estado del último escaneo: aviso (no es error ni éxito pleno) */
+.scan-estado[data-tipo="aviso"] { background: var(--warn-50); border-color: var(--warn-200); color: var(--warn-text); }
+
+/* Pendiente de revisión: N/S sin coincidencia en el inventario (icono + texto, no solo color) */
+.badge-revision { background: #FFF6CC; color: #6B4E00; border: 1px solid #F0D36B; gap: 4px; }
+a.badge-revision:hover { border-color: #C9A400; }
+.chip-revision { background: #FFF6CC; border-color: #F0D36B; color: #6B4E00; font-weight: 600; }
+.chip-etiqueta { margin-left: 6px; font-family: var(--font); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.revision-resumen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; color: #6B4E00; overflow-wrap: anywhere; }
+tr.is-revision > td { background: #FFFBE6; }
+
+/* Modal de resultado de la N/S */
+.dialog-serie { text-align: center; }
+.dialog-serie-icono {
+  width: 48px; height: 48px; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 24px; font-weight: 700; background: var(--warn-50); color: var(--warn-text);
+}
+.dialog-serie[data-tipo="ok"] .dialog-serie-icono { background: var(--success-50); color: var(--success-text); }
+.dialog-serie[data-tipo="ok"] { position: fixed; inset: auto 12px 84px 12px; margin: 0 auto; z-index: 60; }
+.dialog-serie-ns { margin-top: 10px; font-size: 18px; font-weight: 600; color: var(--brand); overflow-wrap: anywhere; }
+
+/* Movimientos de la mudanza */
+.movimientos { display: grid; gap: 8px; }
+.movimiento-fila { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 8px; align-items: center; }
+.movimiento-fila .flecha { color: var(--text-3); }
+@media (max-width: 480px) {
+  .movimiento-fila { grid-template-columns: 1fr auto; }
+  .movimiento-fila .flecha { display: none; }
+}
+
+/* Inventarios */
+.almacenes { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.almacen-card { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+.almacen-card h3 { font-size: 16px; }
+.almacen-card .hint { overflow-wrap: anywhere; }
+.carga-detalle { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-2); max-height: 260px; overflow-y: auto; }
+.control:has([data-sku-abrir]) .input { padding-right: 46px; }
+
+/* Etiquetas por pieza */
+.section-hint { margin: -6px 0 14px; font-size: 13px; color: var(--text-2); }
+[data-etiquetas-boton] .badge { margin-left: 4px; }
+.seleccion-etiquetas { display: flex; flex-wrap: wrap; gap: 8px; }
+.seleccion-pieza { margin-top: 14px; }
+.input-con-boton { display: flex; gap: 8px; }
+.input-con-boton .input { flex: 1 1 auto; min-width: 0; }
+.seleccion-resumen { margin: 12px 0 14px; font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.etiqueta-hoja figcaption { overflow-wrap: anywhere; }
+
+/* Corregir: agregar y editar N/S lado a lado en pantalla ancha; apilados en el handheld. */
+.correccion-ns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; margin: 16px 0; }
+.correccion-ns .card { margin: 0; }
+
+/* Reporte Diario: filtro de día compacto. */
+.filtros-dia { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)) auto; border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: 20px; }
+
+/* Inventarios: SKU dados de alta a mano (sin N/S). */
+.skus-alta { margin-top: 8px; font-size: 13px; }
+.skus-alta > summary { cursor: pointer; font-weight: 600; color: var(--brand); min-height: 40px; display: flex; align-items: center; }
+.skus-alta ul { margin: 4px 0 0; padding-left: 18px; max-height: 200px; overflow-y: auto; color: var(--text-2); overflow-wrap: anywhere; }

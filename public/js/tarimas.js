@@ -22,7 +22,7 @@
 
   function deshabilitar(btn) {
     btn.disabled = true;
-    btn.closest('[data-guardar-wrap]')?.setAttribute('title', 'Primero imprime la etiqueta de esta tarima');
+    btn.closest('[data-guardar-wrap]')?.setAttribute('title', 'Primero imprime las etiquetas de las piezas de este embarque');
   }
 
   function alerta(tipo, texto) {
@@ -51,7 +51,7 @@
 
   function mensajeDeError(respuesta, datos) {
     if (respuesta.status === 419) return 'Tu sesión expiró. Recarga la página e inténtalo nuevamente.';
-    if (respuesta.status === 403) return 'No tienes permiso para guardar esta tarima.';
+    if (respuesta.status === 403) return 'No tienes permiso para guardar este embarque.';
     const detalle = datos?.errors?.tarima?.[0];
     return detalle ? `${MSG_ERROR} ${detalle}` : MSG_ERROR;
   }
@@ -60,6 +60,12 @@
     if (btn.disabled || btn.classList.contains('is-loading')) return;
 
     const uuid = btn.dataset.uuid;
+    // Antes de guardar se revisan los productos dañados: cada uno se vuelve incidencia.
+    const anomalias = (btn.dataset.anomalias || '').split(', ').filter(Boolean);
+    if (anomalias.length && !window.confirm(
+      `Al guardar el ${btn.dataset.nombre} se registrará${anomalias.length === 1 ? '' : 'n'} ${anomalias.length} ` +
+      `incidencia${anomalias.length === 1 ? '' : 's'} de producto dañado:\n\n${anomalias.join('\n')}\n\n¿Guardar el embarque?`)) return;
+
     const texto = btn.querySelector('[data-guardar-texto]');
     btn.disabled = true;
     btn.classList.add('is-loading');

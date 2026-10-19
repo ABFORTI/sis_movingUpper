@@ -1,13 +1,16 @@
 @extends('layouts.app')
 
-@section('title', "Etiqueta {$tarima->nombre}")
+@section('title', "Etiquetas {$tarima->nombre}")
+
+@php
+  $origen = $volver === 'historial' ? ['historial', 'Historial'] : ['wms', 'Escaneo'];
+  $n = $seleccion->count();
+  $titulos = ['pendientes' => 'Sin imprimir', 'todas' => 'Todas', 'pieza' => 'Una pieza'];
+@endphp
 
 @section('content')
 <main class="page">
 
-  @php
-    $origen = $tarima->estaGuardada() ? ['historial', 'Historial'] : ['wms', 'Escaneo'];
-  @endphp
   <nav class="breadcrumb" aria-label="Ruta">
     <a href="{{ route($origen[0]) }}">{{ $origen[1] }}</a>
     <x-icon name="chevron-right" />
@@ -16,11 +19,11 @@
 
   <div class="page-head">
     <div>
-      <h1 class="page-title">Etiqueta de {{ $tarima->nombre }}</h1>
+      <h1 class="page-title">Etiquetas del {{ $tarima->nombre }}</h1>
+      <p class="page-sub">Una etiqueta por pieza, con su modelo, el número de embarque <b class="mono">{{ $tarima->identificador }}</b> y el código de barras de su N/S.</p>
     </div>
-    <a class="btn btn-secondary" href="{{ route($origen[0]) }}"><x-icon name="arrow-left" /> Volver {{ $tarima->estaGuardada() ? 'al historial' : 'al escaneo' }}</a>
+    <a class="btn btn-secondary" href="{{ route($origen[0]) }}"><x-icon name="arrow-left" /> Volver {{ $volver === 'historial' ? 'al historial' : 'al escaneo' }}</a>
   </div>
-
 
   <div class="print-layout">
 
@@ -28,50 +31,50 @@
       <div class="card-head">
         <div>
           <h2 class="card-title"><x-icon name="printer" /> Impresión</h2>
-          <p class="card-desc">Destino <b>{{ $destino }}</b> · {{ count($etiquetasSvg) }} {{ Str::plural('etiqueta', count($etiquetasSvg)) }}</p>
+          <p class="card-desc">
+            {{ $todas->count() }} {{ Str::plural('pieza', $todas->count()) }} en el embarque ·
+            @if ($pendientes->isEmpty())
+              todas con etiqueta impresa
+            @else
+              <b>{{ $pendientes->count() }} sin etiqueta</b>
+            @endif
+          </p>
         </div>
       </div>
       <div class="card-body">
-        <button type="button" class="btn btn-primary btn-lg btn-block" id="btnImprimir"
-                data-zpl="{{ route('etiquetas.zpl', $tarima) }}"
-                data-impresa="{{ route('tarimas.impresa', $tarima) }}"
-                data-diagnostico="{{ route('impresion.diagnostico') }}"
-                data-uuid="{{ $tarima->uuid }}">
-          <span class="spinner" aria-hidden="true"></span>
-          <x-icon name="printer" class="btn-icon" /> <span data-texto>Imprimir etiqueta</span>
-        </button>
-        <div id="impresionEstado" class="status-box" role="status" aria-live="polite"></div>
+        <div class="seleccion-etiquetas" role="group" aria-label="Qué etiquetas imprimir">
+          @if ($pendientes->isNotEmpty())
+            <a href="{{ route('etiquetas.show', $tarima) }}" @class(['btn btn-sm', 'btn-primary' => $modo === 'pendientes', 'btn-secondary' => $modo !== 'pendientes']) @if ($modo === 'pendientes') aria-current="true" @endif>Sin imprimir ({{ $pendientes->count() }})</a>
+          @endif
+          <a href="{{ route('etiquetas.show', ['tarima' => $tarima, 'ver' => 'todas']) }}" @class(['btn btn-sm', 'btn-primary' => $modo === 'todas', 'btn-secondary' => $modo !== 'todas']) @if ($modo === 'todas') aria-current="true" @endif>Todas ({{ $todas->count() }})</a>
+        </div>
 
-        <div id="impresionVerificar" class="verify-box" hidden>
-          <p class="verify-title">¿La etiqueta salió completa y legible?</p>
-          <p class="verify-text">Revisa que el QR y el código de barras no estén cortados ni borrosos.</p>
-          <div class="btn-group">
-            <button type="button" class="btn btn-success btn-sm" id="btnConfirmar"><x-icon name="check" /> Sí, se imprimió bien</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btnReintentar">No, imprimir de nuevo</button>
+        <form method="GET" action="{{ route('etiquetas.show', $tarima) }}" class="field seleccion-pieza">
+          <label for="pieza" class="label">Reimprimir una pieza <span class="optional">si su etiqueta se dañó</span></label>
+          <div class="input-con-boton">
+            <select id="pieza" name="piezas" class="input">
+              @foreach ($todas as $ns)
+                <option value="{{ $ns->id }}" @selected($modo === 'pieza' && $seleccion->contains('id', $ns->id))>{{ $ns->numero_serie }} · {{ $modelos[$ns->id] }}{{ $ns->etiquetaPendiente() ? ' · sin imprimir' : '' }}</option>
+              @endforeach
+            </select>
+            <button type="submit" class="btn btn-secondary">Elegir</button>
           </div>
-        </div>
+        </form>
 
-        <div class="divider">Impresora</div>
+        <p class="seleccion-resumen" role="status">
+          {{ $titulos[$modo] }}: <b>{{ $n }} {{ Str::plural('etiqueta', $n) }}</b>@if ($n === 1) (N/S <span class="mono">{{ $seleccion->first()->numero_serie }}</span>)@endif.
+          @if ($modo !== 'pendientes' && $seleccion->contains(fn ($ns) => ! $ns->etiquetaPendiente()))
+            Es una reimpresión: pega la nueva sobre la anterior.
+          @endif
+        </p>
 
-        <div class="action-list">
-          <button type="button" class="btn btn-secondary btn-block" id="btnBuscar"><x-icon name="search" /> Buscar impresora</button>
-          <button type="button" class="btn btn-ghost btn-block" id="btnOlvidar" hidden><x-icon name="x" /> Usar otra impresora Bluetooth</button>
-        </div>
-
-        <div class="divider">Otras opciones</div>
-
-        <div class="action-list">
-          <a class="btn btn-secondary btn-block" href="{{ route('etiquetas.zpl', ['tarima' => $tarima, 'descargar' => 1]) }}"><x-icon name="download" /> Descargar archivo .zpl</a>
-          <button type="button" class="btn btn-ghost btn-block" id="btnNavegador"><x-icon name="printer" /> Imprimir con el navegador</button>
-        </div>
-
-        <div class="note">
-          <x-icon name="info" class="icon-sm" />
-          <p>
-            <b>Android / handheld:</b> app Zebra Browser Print<br>
-            <b>Computadora:</b> Chrome o Edge se conectan por Bluetooth directamente; por USB, con Browser Print.<br>
-          </p>
-        </div>
+        @include('impresion.partials.panel', [
+          'zpl' => route('etiquetas.zpl', ['tarima' => $tarima, 'piezas' => $piezasParam]),
+          'impresa' => route('tarimas.impresa', ['tarima' => $tarima, 'piezas' => $piezasParam]),
+          'uuid' => $tarima->uuid,
+          'descargar' => route('etiquetas.zpl', ['tarima' => $tarima, 'piezas' => $piezasParam, 'descargar' => 1]),
+          'textoBoton' => $n === 1 ? 'Imprimir etiqueta' : "Imprimir {$n} etiquetas",
+        ])
       </div>
     </section>
 
@@ -79,19 +82,20 @@
       <div class="card-head">
         <div>
           <h2 class="card-title"><x-icon name="tag" /> Vista previa</h2>
-          <p class="card-desc">Mismo diseño que se envía a la impresora, a escala.</p>
+          <p class="card-desc">Mismo diseño que se envía a la impresora, a escala. Pega cada etiqueta en la pieza con ese N/S.</p>
         </div>
-        <span class="badge badge-muted">{{ $soloPadre ? 'SKU padre + QR' : 'Listado de piezas' }}</span>
+        <span class="badge badge-muted">Una por pieza</span>
       </div>
       <div class="card-body">
         <div class="preview-canvas">
           <div id="zonaImpresion">
-            @foreach ($etiquetasSvg as $i => $svg)
+            @foreach ($seleccion as $i => $ns)
               <figure class="etiqueta-hoja">
-                {!! $svg !!}
-                @if (count($etiquetasSvg) > 1)
-                  <figcaption>Etiqueta {{ $i + 1 }} de {{ count($etiquetasSvg) }}</figcaption>
-                @endif
+                {!! $etiquetasSvg[$ns->id] !!}
+                <figcaption>
+                  {{ $i + 1 }} de {{ $n }} · N/S <span class="mono">{{ $ns->numero_serie }}</span>
+                  · {{ $ns->etiquetaPendiente() ? 'sin imprimir' : 'impresa el '.$ns->etiqueta_impresa_at->format('d/m/Y H:i') }}
+                </figcaption>
               </figure>
             @endforeach
           </div>

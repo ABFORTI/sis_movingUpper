@@ -8,8 +8,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 interface ExportadorTarimas
 {
-    public function tarima(Tarima $tarima): StreamedResponse;
-
-    /** @param Collection<int, Tarima> $tarimas */
-    public function todas(Collection $tarimas): StreamedResponse;
+    /**
+     * @param Collection<int, Tarima> $tarimas
+     * @param string $alcance nombre del archivo sin fecha
+     */
+    public function todas(Collection $tarimas, string $alcance): StreamedResponse;
 }

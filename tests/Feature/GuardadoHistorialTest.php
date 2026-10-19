@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Destino;
+use App\Models\InventarioItem;
 use App\Models\Role;
 use App\Models\Tarima;
 use App\Models\User;
@@ -14,23 +14,24 @@ class GuardadoHistorialTest extends TestCase {
     use PreparaWms;
 
     private function tarimaDe(User $usuario): Tarima {
-        return Tarima::create(['created_by' => $usuario->id]);
+        return $this->tarima($usuario);
     }
 
-    /** Captura un SKU suelto con descripción y destino dados. */
-    private function capturar(User $usuario, Tarima $tarima, string $sku, string $descripcion = 'Caja', ?Destino $destino = null): void {
-        $this->actingAs($usuario)->post(route('escaneo.simple'), [
-            'sku' => $sku,
-            'descripcion' => $descripcion,
-            'destino_id' => ($destino ?? $this->destino())->id,
-            'tarima' => $tarima->uuid,
-        ])->assertSessionHasNoErrors();
+    /** Captura una pieza (SKU del inventario con esa descripción + la N/S "NS-{sku}"). */
+    private function capturar(User $usuario, Tarima $tarima, string $sku, string $descripcion = 'Caja'): void {
+        if (! InventarioItem::where('sku', $sku)->exists()) {
+            $this->enInventario([['sku' => $sku, 'descripcion' => $descripcion, 'ns_lote' => "LOTE-{$sku}"]]);
+        }
+        $this->actingAs($usuario)->post(route('escaneo.padre.cerrar'));
+        $this->activarPadre($usuario, $tarima, $sku);
+        $this->escanearNs("NS-{$sku}")->assertSessionHasNoErrors();
+        $this->post(route('escaneo.padre.cerrar'));
     }
 
     /** Tarima creada por $usuario, impresa y guardada por el flujo HTTP real. */
-    private function tarimaGuardada(User $usuario, string $sku = 'SKU-1', string $descripcion = 'Caja', ?Destino $destino = null): Tarima {
+    private function tarimaGuardada(User $usuario, string $sku = 'SKU-1', string $descripcion = 'Caja'): Tarima {
         $tarima = $this->tarimaDe($usuario);
-        $this->capturar($usuario, $tarima, $sku, $descripcion, $destino);
+        $this->capturar($usuario, $tarima, $sku, $descripcion);
         $this->actingAs($usuario)->postJson(route('tarimas.impresa', $tarima))->assertOk();
         $this->actingAs($usuario)->postJson(route('tarimas.guardar', $tarima))->assertOk();
 
@@ -44,11 +45,11 @@ class GuardadoHistorialTest extends TestCase {
         $tarima = $this->tarimaDe($operador);
         $this->capturar($operador, $tarima, 'SKU-1');
 
-        $this->get(route('wms'))->assertOk()->assertSee('Primero imprime la etiqueta de esta tarima');
+        $this->get(route('wms'))->assertOk()->assertSee('Primero imprime las etiquetas de las piezas de este embarque')->assertSee('1 sin imprimir');
 
         $this->postJson(route('tarimas.guardar', $tarima))
             ->assertStatus(422)
-            ->assertJsonPath('errors.tarima.0', "Primero imprime la etiqueta de la {$tarima->nombre}.");
+            ->assertJsonPath('errors.tarima.0', "Primero imprime las etiquetas de las piezas del {$tarima->nombre}.");
         $this->assertNull($tarima->fresh()->guardada_at);
     }
 
@@ -114,9 +115,8 @@ class GuardadoHistorialTest extends TestCase {
         $operador = $this->operador();
         $tarima = $this->tarimaGuardada($operador);
 
-        $this->post(route('escaneo.simple'), [
-            'sku' => 'OTRO', 'destino_id' => $this->destino()->id, 'tarima' => $tarima->uuid,
-        ])->assertSessionHasErrors('tarima');
+        $this->skuEnInventario('OTRO');
+        $this->post(route('escaneo.padre'), ['sku' => 'OTRO', 'tarima' => $tarima->uuid])->assertSessionHasErrors('tarima');
 
         $this->delete(route('tarimas.vaciar', $tarima))->assertForbidden();
         $this->assertSame(1, $tarima->registros()->count());
@@ -126,40 +126,41 @@ class GuardadoHistorialTest extends TestCase {
         $operador = $this->operador();
         $tarima = $this->tarimaDe($operador);
         $this->activarPadre($operador, $tarima);
-        $this->post(route('escaneo.ns'), ['numero_serie' => 'SN-1']);
+        $this->escanearNs('SN-1');
         $this->postJson(route('tarimas.impresa', $tarima));
 
         $this->postJson(route('tarimas.guardar', $tarima))->assertOk()->assertJson(['recargar' => true]);
 
-        $this->post(route('escaneo.ns'), ['numero_serie' => 'SN-2'])->assertSessionHasErrors('numero_serie');
+        $this->escanearNs('SN-2')->assertSessionHasErrors('numero_serie');
     }
 
-    public function test_la_tarjeta_conserva_la_fecha_de_impresion(): void {
+    public function test_la_reimpresion_de_un_embarque_guardado_da_las_mismas_etiquetas(): void {
         $operador = $this->operador();
         $this->travelTo(now()->setDate(2026, 1, 15));
         $tarima = $this->tarimaGuardada($operador);
+        $antes = $this->actingAs($operador)->get(route('etiquetas.zpl', $tarima))->getContent();
         $this->travelBack();
 
-        $zpl = $this->actingAs($operador)->get(route('etiquetas.zpl', $tarima))->getContent();
-        $this->assertStringContainsString('^FDFECHA^FS', $zpl);
-        $this->assertStringContainsString('^FD2026-01-15^FS', $zpl);
-        $this->assertStringContainsString('TAR-'.$tarima->id.'|20260115', $zpl);
+        // Sin fechas ni datos que cambien: la etiqueta reimpresa es idéntica a la original.
+        $this->assertSame($antes, $this->actingAs($operador)->get(route('etiquetas.zpl', $tarima))->getContent());
+        $this->assertStringNotContainsString('TAR-', $antes);
     }
 
     // ---------- Permisos por rol (IDOR) ----------
 
-    public function test_operador_solo_ve_sus_tarimas_guardadas(): void {
+    public function test_operador_ve_todas_las_tarimas_guardadas_de_la_mudanza(): void {
         $op1 = $this->operador();
         $op2 = $this->operador();
         $deOp1 = $this->tarimaGuardada($op1, 'SKU-OP1');
         $deOp2 = $this->tarimaGuardada($op2, 'SKU-OP2');
 
-        $this->actingAs($op1)->get(route('historial'))->assertOk()->assertSee('SKU-OP1')->assertDontSee('SKU-OP2');
+        // Todos trabajan la misma mudanza: el historial muestra todo, con quién lo creó.
+        $this->actingAs($op1)->get(route('historial'))->assertOk()
+            ->assertSee('SKU-OP1')->assertSee('SKU-OP2')->assertSee('Creado por');
 
-        // Acceso directo por URL a la tarima de otro operador.
-        $this->actingAs($op1)->get(route('etiquetas.show', $deOp2))->assertForbidden();
-        $this->actingAs($op1)->get(route('etiquetas.zpl', $deOp2))->assertForbidden();
-        $this->actingAs($op1)->get(route('export.tarima', $deOp2))->assertForbidden();
+        // Ver en lectura sí; operar la de otro, no.
+        $this->actingAs($op1)->get(route('etiquetas.show', $deOp2))->assertOk();
+        $this->actingAs($op1)->postJson(route('tarimas.impresa', $deOp2))->assertForbidden();
         $this->actingAs($op1)->postJson(route('tarimas.guardar', $deOp2))->assertForbidden();
         $this->actingAs($op1)->get(route('etiquetas.show', $deOp1))->assertOk();
     }
@@ -177,13 +178,12 @@ class GuardadoHistorialTest extends TestCase {
         $auditor = $this->auditor();
         $deOp = $this->tarimaGuardada($this->operador(), 'SKU-OP1');
 
-        $this->actingAs($auditor)->get(route('historial'))->assertOk()->assertSee('SKU-OP1')->assertSee('Creada por');
+        $this->actingAs($auditor)->get(route('historial'))->assertOk()->assertSee('SKU-OP1')->assertSee('Creado por');
         $this->actingAs($auditor)->get(route('etiquetas.show', $deOp))->assertOk();
         $this->actingAs($auditor)->get(route('etiquetas.zpl', $deOp))->assertOk();
-        $this->actingAs($auditor)->get(route('export.tarima', $deOp))->assertOk();
     }
 
-    public function test_operador_no_ve_ni_trabaja_tarimas_temporales_de_otros(): void {
+    public function test_operador_ve_pero_no_trabaja_tarimas_temporales_de_otros(): void {
         $op1 = $this->operador();
         $op2 = $this->operador();
         $ajena = $this->tarimaDe($op2);
@@ -191,19 +191,18 @@ class GuardadoHistorialTest extends TestCase {
         $propia = $this->tarimaDe($op1);
         $this->flushSession();
 
+        // La ajena aparece solo en la lista de lectura (sin su uuid para capturar ni su contenido).
         $this->actingAs($op1)->get(route('wms'))->assertOk()
-            ->assertSee($propia->uuid)->assertDontSee($ajena->uuid)->assertDontSee('SKU-AJENO');
+            ->assertSee($propia->uuid)->assertDontSee($ajena->uuid)->assertDontSee('SKU-AJENO')
+            ->assertSee('En captura por otros')->assertSee($ajena->codigo.' ('.$op2->name.')');
 
-        $this->actingAs($op1)->post(route('escaneo.simple'), [
-            'sku' => 'INTRUSO', 'destino_id' => $this->destino()->id, 'tarima' => $ajena->uuid,
-        ])->assertForbidden();
+        $this->skuEnInventario('INTRUSO');
         $this->actingAs($op1)->post(route('escaneo.padre'), [
-            'sku' => 'INTRUSO', 'destino_id' => $this->destino()->id, 'tarima' => $ajena->uuid,
+            'sku' => 'INTRUSO', 'tarima' => $ajena->uuid,
         ])->assertForbidden();
         $this->actingAs($op1)->delete(route('tarimas.vaciar', $ajena))->assertForbidden();
         $this->actingAs($op1)->postJson(route('tarimas.impresa', $ajena))->assertForbidden();
-        $this->actingAs($op1)->get(route('etiquetas.show', $ajena))->assertForbidden();
-        $this->actingAs($op1)->get(route('export.tarima', $ajena))->assertForbidden();
+        $this->actingAs($op1)->post(route('tarimas.anular', $ajena), ['motivo' => 'No es mía'])->assertForbidden();
 
         $this->assertSame(['SKU-AJENO'], $ajena->registros()->pluck('sku')->all());
     }
@@ -215,11 +214,13 @@ class GuardadoHistorialTest extends TestCase {
         $this->actingAs($auditor)->get(route('wms'))->assertOk()->assertSee($ajena->uuid);
         $this->capturar($auditor, $ajena, 'SKU-AUD');
 
+        // Como el operador, no anula una tarima con contenido (eso es del admin).
+        $this->actingAs($auditor)->post(route('tarimas.anular', $ajena), ['motivo' => 'Prueba de auditor'])->assertForbidden();
+
         // Vacía con borrado lógico, como el operador.
         $this->actingAs($auditor)->delete(route('tarimas.vaciar', $ajena))->assertRedirect(route('wms'));
         $this->assertSame(1, $ajena->registros()->onlyTrashed()->count());
 
-        $this->actingAs($auditor)->delete(route('tarimas.destroy', $ajena))->assertForbidden();
         $this->actingAs($auditor)->get(route('usuarios.index'))->assertForbidden();
     }
 
@@ -229,27 +230,27 @@ class GuardadoHistorialTest extends TestCase {
         $this->actingAs($this->operador())->get(route('export.todas'))->assertSessionHasErrors('tarima');
     }
 
-    public function test_exportar_todas_no_incluye_guardadas_de_otros_operadores(): void {
+    public function test_exportar_todas_incluye_las_guardadas_de_otros_operadores(): void {
         $this->tarimaGuardada($this->operador());
         $op = $this->operador();
 
-        // Sin tarimas propias ni temporales con productos: nada que exportar.
-        $this->actingAs($op)->get(route('export.todas'))->assertSessionHasErrors('tarima');
+        $this->actingAs($op)->get(route('export.todas'))->assertOk()
+            ->assertDownload('MUD-0001_Todas_Tarimas_'.now()->format('Y-m-d').'.xlsx');
     }
 
     // ---------- Historial: filtros, paginación y QR ----------
 
     public function test_filtros_individuales_y_combinados(): void {
         $admin = $this->admin();
-        [$a, $b] = Destino::orderBy('codigo')->take(2)->get();
-        $t1 = $this->tarimaGuardada($admin, 'SKU-BOMBA', 'Bomba hidráulica', $a);
-        $this->tarimaGuardada($admin, 'SKU-CABLE', 'Cable eléctrico', $b);
+        $t1 = $this->tarimaGuardada($admin, 'SKU-BOMBA', 'Bomba hidráulica');
+        $this->tarimaGuardada($admin, 'SKU-CABLE', 'Cable eléctrico');
 
         $this->get(route('historial', ['descripcion' => 'bomba']))->assertSee('SKU-BOMBA')->assertDontSee('SKU-CABLE');
-        $this->get(route('historial', ['destino' => $b->nombre]))->assertSee('SKU-CABLE')->assertDontSee('SKU-BOMBA');
+        $this->get(route('historial', ['numero_serie' => 'NS-SKU-CABLE']))->assertSee('SKU-CABLE')->assertDontSee('SKU-BOMBA');
         $this->get(route('historial', ['tarima' => "Tarima {$t1->id}"]))->assertSee('SKU-BOMBA')->assertDontSee('SKU-CABLE');
-        $this->get(route('historial', ['descripcion' => 'bomba', 'destino' => $b->codigo]))
-            ->assertDontSee('SKU-BOMBA')->assertDontSee('SKU-CABLE')->assertSee('Sin resultados');
+        // El campo de filtro conserva lo escrito ("NS-SKU-CABLE"): se revisa que no haya filas.
+        $this->get(route('historial', ['descripcion' => 'bomba', 'numero_serie' => 'NS-SKU-CABLE']))
+            ->assertDontSee('SKU-BOMBA')->assertDontSee('<span class="chip">SKU-CABLE</span>', false)->assertSee('Sin resultados');
     }
 
     public function test_paginacion_conserva_los_filtros(): void {
@@ -264,12 +265,11 @@ class GuardadoHistorialTest extends TestCase {
         $this->get(route('historial', ['descripcion' => 'común', 'page' => 2]))->assertOk()->assertSee('de <b>17</b>', false);
     }
 
-    public function test_ver_qr_usa_la_misma_url_firmada_del_qr(): void {
-        // Solo las tarimas de SKU padre llevan QR en la etiqueta.
+    public function test_ver_piezas_usa_la_url_firmada_y_la_etiqueta_ya_no_lleva_qr(): void {
         $operador = $this->operador();
         $tarima = $this->tarimaDe($operador);
         $this->activarPadre($operador, $tarima, 'SKU-QR');
-        $this->post(route('escaneo.ns'), ['numero_serie' => 'SN-QR']);
+        $this->escanearNs('SN-QR');
         $this->postJson(route('tarimas.impresa', $tarima))->assertOk();
         $this->postJson(route('tarimas.guardar', $tarima))->assertOk();
         $url = app(TarimaService::class)->urlDetalle($tarima);
@@ -277,10 +277,11 @@ class GuardadoHistorialTest extends TestCase {
         $this->actingAs($operador)->get(route('historial'))->assertSee(e($url), false);
 
         $zpl = $this->get(route('etiquetas.zpl', $tarima))->getContent();
-        $this->assertStringContainsString($url, $zpl);
+        $this->assertStringNotContainsString($url, $zpl);
+        $this->assertStringNotContainsString('^BQN', $zpl);
 
         auth()->logout();
-        $this->get($url)->assertOk()->assertSee('SKU-QR');
+        $this->get($url)->assertOk()->assertSee('SKU-QR')->assertSee('Sin cargar');
     }
 
     public function test_historial_requiere_sesion(): void {

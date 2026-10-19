@@ -12,14 +12,21 @@ class ZplRenderer {
         $media = self::MEDIA[$f->media] ?? throw new InvalidArgumentException("Tipo de papel no válido: {$f->media}");
         $dx = $f->desfaseX;
 
+        // Cada etiqueta lleva su propia configuración de papel y origen. Así no
+        // depende de lo que la impresora tenga guardado de otro rollo u otra app
+        // (un ^LT o ^LS viejo es lo que corre el contenido hacia abajo o lo corta).
         $zpl = [
             '^XA',
-            '^CI28',             
-            "^MN{$media}",             
-            "^PW{$f->anchoImprimible}", 
-            "^LL{$f->alto}",            
-            '^LH0,0',
-            '^PON',
+            '^CI28',                    // UTF-8
+            '^MTD',                     // térmica directa (la ZQ620 no usa ribbon)
+            "^MN{$media}",              // tipo de papel: gap, marca negra o continuo
+            '^MMT',                     // modo corte manual (tear-off), sin despegador
+            "^PW{$f->anchoImprimible}", // ancho que imprime el cabezal
+            "^LL{$f->alto}",            // largo de la etiqueta
+            '^LH0,0',                   // origen en la esquina superior izquierda
+            "^LT{$f->ajusteSuperior}",  // ajuste fino vertical (0 = sin ajuste)
+            '^LS0',                     // sin desplazamiento horizontal
+            '^PON',                     // orientación normal
         ];
 
         foreach ($lienzo->elementos() as $e) {

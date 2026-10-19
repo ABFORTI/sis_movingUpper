@@ -4,8 +4,10 @@ namespace Tests\Feature\KpiApi;
 
 use App\Enums\TipoRegistro;
 use App\KpiApi\KpiApi;
-use App\Models\Destino;
+use App\Models\Almacen;
+use App\Models\MudanzaMovimiento;
 use App\Models\Impresion;
+use App\Models\Mudanza;
 use App\Models\NumeroSerie;
 use App\Models\Registro;
 use App\Models\Role;
@@ -14,7 +16,6 @@ use App\Models\User;
 use App\Services\Etiquetas\EtiquetaService;
 use App\Services\TarimaService;
 use Closure;
-use Database\Seeders\DestinoSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -31,12 +32,22 @@ class MovingUpperKpisTest extends TestCase {
 
     protected function setUp(): void {
         parent::setUp();
-        $this->seed([RoleSeeder::class, DestinoSeeder::class]);
+        $this->seed([RoleSeeder::class]);
         $this->hoy();
+        $mudanza = Mudanza::create(['folio' => 'MUD-0001', 'cliente' => 'Euroquip', 'estado' => Mudanza::ACTIVA]);
+        MudanzaMovimiento::create([
+            'mudanza_id' => $mudanza->id,
+            'almacen_origen_id' => Almacen::create(['codigo' => 'A'])->id,
+            'almacen_destino_id' => Almacen::create(['codigo' => 'B'])->id,
+        ]);
         $this->token = User::factory()->create()->createToken('kpi-central', [KpiApi::ABILITY])->plainTextToken;
     }
 
     // ---------- Ayudantes ----------
+
+    private function nuevaTarima(?User $usuario = null): Tarima {
+        return app(TarimaService::class)->crear($usuario);
+    }
 
     private function hoy(): void {
         Carbon::setTestNow(Carbon::parse(self::HOY, config('app.timezone')));
@@ -54,10 +65,10 @@ class MovingUpperKpisTest extends TestCase {
 
     private function escanear(string $momento, ?User $usuario = null, string $sku = 'SKU-P', ?Tarima $tarima = null, ?string $ns = null): NumeroSerie {
         return $this->en($momento, function () use ($usuario, $sku, $tarima, $ns) {
-            $tarima ??= Tarima::create(['created_by' => $usuario?->id]);
+            $tarima ??= $this->nuevaTarima($usuario);
             $registro = Registro::firstOrCreate(
                 ['tarima_id' => $tarima->id, 'sku' => $sku],
-                ['tipo' => TipoRegistro::Padre, 'destino_id' => Destino::first()->id, 'user_id' => $usuario?->id],
+                ['tipo' => TipoRegistro::Padre, 'user_id' => $usuario?->id],
             );
 
             return $registro->numerosSerie()->create(['numero_serie' => $ns ?? 'SN-'.++$this->secuencia, 'user_id' => $usuario?->id]);
@@ -66,12 +77,12 @@ class MovingUpperKpisTest extends TestCase {
 
     private function simple(string $momento, Tarima $tarima, string $sku, ?User $usuario = null): Registro {
         return $this->en($momento, fn () => $tarima->registros()->create([
-            'tipo' => TipoRegistro::Simple, 'sku' => $sku, 'destino_id' => Destino::first()->id, 'user_id' => $usuario?->id,
+            'tipo' => TipoRegistro::Simple, 'sku' => $sku, 'user_id' => $usuario?->id,
         ]));
     }
 
     private function guardada(string $momento, ?User $usuario = null, array $skus = ['SKU-T']): Tarima {
-        $tarima = $this->en($momento, fn () => Tarima::create(['created_by' => $usuario?->id]));
+        $tarima = $this->en($momento, fn () => $this->nuevaTarima($usuario));
         foreach ($skus as $sku) {
             $this->simple($momento, $tarima, $sku, $usuario);
         }
@@ -215,7 +226,7 @@ class MovingUpperKpisTest extends TestCase {
 
     public function test_series_duplicadas_borrada_y_reescaneada_cuenta_una_vez(): void {
         $operador = User::factory()->conRol(Role::OPERADOR)->create();
-        $primera = Tarima::create(['created_by' => $operador->id]);
+        $primera = $this->nuevaTarima($operador);
         $this->escanear('2026-10-01 10:00:00', $operador, 'SKU-P', $primera, 'SN-DUP');
         $this->escanear('2026-10-01 10:05:00', $operador, 'SKU-P', $primera, 'SN-OTRA');
 
@@ -257,7 +268,7 @@ class MovingUpperKpisTest extends TestCase {
         $this->guardada('2026-09-30 18:00:00', $ana, ['SKU-A', 'SKU-B']);
         $this->guardada('2026-10-01 09:00:00', $ana, ['SKU-A']);
         $this->guardada('2026-10-01 10:00:00', $beto, ['SKU-C']);
-        $this->en('2026-10-01 11:00:00', fn () => Tarima::create(['created_by' => $ana->id])); // temporal: no cuenta
+        $this->en('2026-10-01 11:00:00', fn () => $this->nuevaTarima($ana)); // temporal: no cuenta
 
         $query = ['fecha_inicio' => '2026-09-30', 'fecha_fin' => '2026-10-01', 'agrupacion' => 'dia'];
         $this->assertSame([1, 2], $this->serie('tarimas-registradas', 'total_tarimas', $query));
@@ -269,8 +280,8 @@ class MovingUpperKpisTest extends TestCase {
     // ---------- skus-registrados ----------
 
     public function test_skus_registrados_separa_padre_simple_y_distintos(): void {
-        $t1 = Tarima::create();
-        $t2 = Tarima::create();
+        $t1 = $this->nuevaTarima();
+        $t2 = $this->nuevaTarima();
         $this->escanear('2026-10-01 10:00:00', null, 'SKU-P', $t1);
         $this->escanear('2026-10-01 10:01:00', null, 'SKU-P', $t1); // misma fila padre: no suma registros
         $this->simple('2026-10-01 11:00:00', $t1, 'SKU-S');
@@ -290,12 +301,12 @@ class MovingUpperKpisTest extends TestCase {
 
     public function test_cada_confirmacion_de_impresion_queda_en_la_bitacora_con_sus_etiquetas(): void {
         $operador = User::factory()->conRol(Role::OPERADOR)->create();
-        $tarima = Tarima::create(['created_by' => $operador->id]);
+        $tarima = $this->nuevaTarima($operador);
         foreach (range(1, 12) as $i) {
-            $this->simple('2026-10-05 09:00:00', $tarima, "SKU-{$i}", $operador);
+            $this->escanear('2026-10-05 09:00:00', $operador, 'SKU-P', $tarima);
         }
         $etiquetas = count(app(EtiquetaService::class)->paginas($tarima->fresh()));
-        $this->assertGreaterThan(1, $etiquetas, 'El listado de 12 SKUs ocupa más de una etiqueta');
+        $this->assertSame(12, $etiquetas, 'Una etiqueta por pieza');
 
         $this->en('2026-10-05 10:00:00', fn () => $this->actingAs($operador)->postJson(route('tarimas.impresa', $tarima))->assertOk()->assertJson(['impresa' => true]));
         $this->en('2026-10-06 08:00:00', fn () => $this->actingAs($operador)->postJson(route('tarimas.impresa', $tarima))->assertOk());
@@ -330,7 +341,7 @@ class MovingUpperKpisTest extends TestCase {
 
     public function test_backfill_crea_una_impresion_por_tarima_impresa(): void {
         $impresa = $this->guardada('2026-09-15 10:00:00');
-        Tarima::create(); // sin imprimir
+        $this->nuevaTarima(); // sin imprimir
         Impresion::query()->delete();
 
         (require database_path('migrations/2026_10_06_000002_create_impresiones_table.php'))->asignarHistoricas();

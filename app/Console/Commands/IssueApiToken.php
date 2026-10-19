@@ -7,13 +7,6 @@ use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 
-/**
- * Emite un token de la API de KPIs (ESTANDAR.md §1) con la ability kpis:read
- * únicamente. El token en texto plano se muestra una sola vez.
- *
- * La cuenta de servicio no tiene rol y su contraseña es aleatoria y no se
- * muestra: no puede iniciar sesión en la web ni ver pantallas del sistema.
- */
 class IssueApiToken extends Command {
     protected $signature = 'api:token
         {email : Correo de la cuenta de servicio}

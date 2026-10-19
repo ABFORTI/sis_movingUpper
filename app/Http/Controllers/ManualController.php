@@ -53,7 +53,7 @@ class ManualController extends Controller {
         return redirect()->route('manuales.index')->with('warn', "Manual «{$nombre}» eliminado.");
     }
 
-    /** Abre el PDF en el visor del navegador. La ruta ya pasó por can:view. */
+
     public function ver(Manual $manual): StreamedResponse {
         return $this->entregar($manual, 'inline');
     }

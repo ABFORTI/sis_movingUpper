@@ -9,17 +9,14 @@ return [
 
     'margen_mm' => (float) env('ZEBRA_MARGEN_MM', 2),
 
-    // Cuánto se sube el QR al imprimir (mm). El comando ^BQ de Zebra coloca el QR unos
+    // Cuánto se sube el QR al imprimir (mm). Hoy solo la etiqueta de prueba lleva QR. El comando ^BQ de Zebra coloca el QR unos
     // puntos por debajo de su posición; la vista previa no se ve afectada.
     // Si en la etiqueta impresa el QR sigue bajo, aumentar; si queda alto, reducir.
     'ajuste_qr_mm' => (float) env('ZEBRA_AJUSTE_QR_MM', 2.5),
 
+    // Ajuste fino vertical de todo el contenido (mm, ^LT). Solo si después de
+    // calibrar el papel la etiqueta de prueba sigue corrida: negativo sube, positivo baja.
+    'ajuste_superior_mm' => (float) env('ZEBRA_AJUSTE_SUPERIOR_MM', 0),
+
     'media' => env('ZEBRA_MEDIA', 'gap'),
-
-    'filas_por_etiqueta' => (int) env('ZEBRA_FILAS_POR_ETIQUETA', 9),
-
-    'logos' => [
-        'izquierdo' => public_path('images/upper_logo1.png'),
-        'derecho' => public_path('images/Euroquip4.png'),
-    ],
 ];

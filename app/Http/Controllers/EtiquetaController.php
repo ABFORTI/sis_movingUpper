@@ -5,41 +5,65 @@ namespace App\Http\Controllers;
 use App\Models\Tarima;
 use App\Services\Etiquetas\EtiquetaService;
 use App\Services\Etiquetas\FormatoEtiqueta;
-use App\Services\TarimaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\View\View;
 
+/**
+ * Etiquetas de las piezas de un embarque: una por pieza. Por omisión se
+ * preparan las que aún no se imprimen; también se pueden reimprimir todas o una
+ * sola. Las piezas elegidas viajan como ids explícitos en las URL del ZPL y de
+ * la confirmación, para que lo que se marca como impreso sea exactamente lo que
+ * salió de la impresora aunque mientras tanto se escaneen más piezas.
+ */
 class EtiquetaController extends Controller {
-    public function __construct(
-        private readonly TarimaService $tarimas,
-        private readonly EtiquetaService $etiquetas,
-    ) { }
+    public function __construct(private readonly EtiquetaService $etiquetas)
+    { }
 
-    public function show(Tarima $tarima): View|RedirectResponse {
-        $tarima->cargarDetalle();
-        if ($tarima->registros->isEmpty()) {
-            return redirect()->route('wms')->withErrors(['tarima' => "La {$tarima->nombre} no tiene productos."]);
+    public function show(Request $request, Tarima $tarima): View|RedirectResponse {
+        $volver = $tarima->estaGuardada() ? 'historial' : 'wms';
+        if ($tarima->estaAnulada()) {
+            return redirect()->route($volver)->withErrors(['tarima' => "El {$tarima->nombre} está anulado; sus etiquetas ya no son válidas."]);
         }
 
+        $todas = $this->etiquetas->piezas($tarima);
+        if ($todas->isEmpty()) {
+            return redirect()->route($volver)->withErrors(['tarima' => "El {$tarima->nombre} no tiene piezas con N/S para etiquetar."]);
+        }
+
+        $pendientes = $todas->filter->etiquetaPendiente()->values();
+        $elegidas = EtiquetaService::ids($request->query('piezas'));
+        [$modo, $seleccion] = match (true) {
+            $elegidas !== null && $todas->whereIn('id', $elegidas)->isNotEmpty() => ['pieza', $todas->whereIn('id', $elegidas)->values()],
+            $request->query('ver') === 'todas' || $pendientes->isEmpty() => ['todas', $todas],
+            default => ['pendientes', $pendientes],
+        };
+        $ids = $seleccion->modelKeys();
+
         return view('etiquetas.show', [
-            'tarima' => $tarima,
-            'soloPadre' => $tarima->esSoloPadre(),
-            'destino' => $this->tarimas->destino($tarima),
-            'etiquetasSvg' => $this->etiquetas->svg($tarima),
+            'tarima' => $tarima->loadMissing('mudanza', 'movimiento.origen', 'movimiento.destino'),
+            'todas' => $todas,
+            'pendientes' => $pendientes,
+            'modo' => $modo,
+            'seleccion' => $seleccion,
+            'piezasParam' => implode(',', $ids),
+            'modelos' => $this->etiquetas->modelos($tarima, $todas),
+            'etiquetasSvg' => $this->etiquetas->svg($tarima, $ids),
             'formato' => FormatoEtiqueta::desdeConfig(),
+            'volver' => $volver,
         ]);
     }
 
     public function zpl(Request $request, Tarima $tarima): Response {
-        $tarima->cargarDetalle();
-        abort_if($tarima->registros->isEmpty(), 422, 'La tarima no tiene productos.');
+        abort_if($tarima->estaAnulada(), 422, 'El embarque está anulado.');
+        $piezas = $this->etiquetas->piezas($tarima, EtiquetaService::ids($request->query('piezas')));
+        abort_if($piezas->isEmpty(), 422, 'El embarque no tiene piezas para etiquetar.');
 
-        $respuesta = response($this->etiquetas->zpl($tarima), 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+        $respuesta = response($this->etiquetas->zpl($tarima, $piezas->modelKeys()), 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
 
         if ($request->boolean('descargar')) {
-            $respuesta->header('Content-Disposition', "attachment; filename=\"tarima_{$tarima->id}.zpl\"");
+            $respuesta->header('Content-Disposition', "attachment; filename=\"{$tarima->mudanza->folio}_{$tarima->codigo}.zpl\"");
         }
 
         return $respuesta;

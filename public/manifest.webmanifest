@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "MovingUpper · Upper Logistics",
+  "short_name": "MovingUpper",
+  "description": "Escaneo, tarimas y etiquetas de mudanzas de Upper Logistics.",
+  "lang": "es-MX",
+  "start_url": "/?origen=app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F6F9",
+  "theme_color": "#1C156D",
+  "icons": [
+    { "src": "/images/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/images/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/images/brand/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "/images/screenshots/escritorio.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "Inicio de sesión de MovingUpper en escritorio" },
+    { "src": "/images/screenshots/movil.png", "sizes": "540x960", "type": "image/png", "form_factor": "narrow", "label": "Inicio de sesión de MovingUpper en móvil" }
+  ],
+  "shortcuts": [
+    { "name": "Escaneo", "url": "/?origen=app", "icons": [{ "src": "/images/brand/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Historial", "url": "/historial?origen=app", "icons": [{ "src": "/images/brand/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

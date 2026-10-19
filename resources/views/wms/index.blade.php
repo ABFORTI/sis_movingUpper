@@ -13,23 +13,54 @@
     <div>
       <p class="eyebrow"><x-icon name="scan" class="icon-sm" />Operación</p>
       <h1 class="page-title">Escaneo de material</h1>
-      <p class="page-sub">Captura productos, asígnalos a una tarima y genera su etiqueta y reporte.</p>
+      <p class="page-sub">
+        @if ($mudanza)
+          Mudanza <b>{{ $mudanza->titulo }}</b> · {{ $mudanza->rutas }}
+        @else
+          Crea un embarque, escanea la N/S de cada pieza e imprime su etiqueta.
+        @endif
+      </p>
     </div>
-    <form method="POST" action="{{ route('tarimas.store') }}" data-loading>
+    <form method="POST" action="{{ route('tarimas.store') }}" class="nueva-tarima" data-loading>
       @csrf
-      <button type="submit" class="btn btn-accent">
+      @if ($movimientos->count() > 1)
+        <label for="movimiento" class="sr-only">Movimiento del nuevo embarque</label>
+        <select id="movimiento" name="movimiento" required @class(['input', 'is-invalid' => $errors->has('movimiento')]) @disabled(! $mudanza?->permiteCaptura())>
+          <option value="">Movimiento…</option>
+          @foreach ($movimientos as $m)
+            <option value="{{ $m->id }}" @selected($movimientoSeleccionado === $m->id)>Almacén {{ $m->nombre }}</option>
+          @endforeach
+        </select>
+      @endif
+      <button type="submit" class="btn btn-accent" @disabled(! $mudanza?->permiteCaptura())>
         <span class="spinner" aria-hidden="true"></span>
-        <x-icon name="plus" class="btn-icon" /> Nueva tarima
+        <x-icon name="plus" class="btn-icon" /> Nuevo embarque
       </button>
     </form>
   </div>
+
+  @unless ($mudanza?->permiteCaptura())
+    <div class="alert alert-warn">
+      <x-icon name="alert" />
+      <div class="alert-body">
+        <p class="alert-title">{{ $mudanza ? "La {$mudanza->folio} está {$mudanza->estado_nombre}" : 'No hay una mudanza activa' }}</p>
+        <p class="alert-text">
+          @if ($mudanza?->permiteCerrarTarimas())
+            Ya no se crean embarques ni se escanea; solo se imprimen etiquetas y se guardan o anulan los que quedaron en captura.
+          @else
+            No se pueden crear embarques ni escanear. {{ auth()->user()->esSupervision() ? 'Actívala desde Mudanzas.' : 'Avisa a supervisión.' }}
+          @endif
+        </p>
+      </div>
+    </div>
+  @endunless
 
   <section class="stats" aria-label="Resumen">
     <div class="stat">
       <span class="tile"><x-icon name="layers" /></span>
       <div style="min-width:0;">
-        <p class="stat-label">Tarimas</p>
-        <p class="stat-value">{{ $tarimas->count() }} <small>{{ $tarimasConProductos->count() }} con carga</small></p>
+        <p class="stat-label">Embarques</p>
+        <p class="stat-value">{{ $tarimas->count() }} <small>{{ $tarimasConProductos->count() }} con piezas</small></p>
       </div>
     </div>
     <div class="stat">
@@ -39,211 +70,215 @@
         <p class="stat-value">{{ number_format($totalPiezas) }}</p>
       </div>
     </div>
-    {{-- En handheld se ocultan: el SKU activo y el modo ya se ven en la tarjeta de captura. --}}
     <div class="stat stat-opcional">
       <span @class(['tile', 'tile-warn' => $skuActivo, 'tile-muted' => ! $skuActivo])><x-icon name="{{ $skuActivo ? 'unlock' : 'lock' }}" /></span>
       <div style="min-width:0;">
-        <p class="stat-label">SKU padre activo</p>
+        <p class="stat-label">SKU activo</p>
         <p @class(['stat-value', 'mono' => $skuActivo])>{{ $skuActivo?->sku ?? '—' }}</p>
-      </div>
-    </div>
-    <div class="stat stat-opcional">
-      <span class="tile tile-ink"><x-icon name="sliders" /></span>
-      <div style="min-width:0;">
-        <p class="stat-label">Modo actual</p>
-        <p class="stat-value" style="font-size:18px;">{{ $modo === 1 ? 'SKU + N/S' : 'Solo SKUs' }}</p>
       </div>
     </div>
   </section>
 
   <div class="workspace">
     <div class="sticky-col">
-      <section class="card">
+      <section class="card card-captura">
         <div class="card-head">
           <div>
             <h2 class="card-title"><span class="step">1</span> Captura</h2>
-            <p class="card-desc">Elige el modo y escanea. <b>Enter</b> agrega el registro.</p>
+            <p class="card-desc">Elige el SKU del inventario y registra cada N/S. <b>Enter</b> agrega.</p>
           </div>
         </div>
 
         <div class="card-body">
-          <div class="segmented" role="group" aria-label="Modo de operación">
-            @foreach ([1 => ['tag', 'SKU + N/S'], 2 => ['package', 'Solo SKUs']] as $valor => [$icono, $texto])
-              <form method="POST" action="{{ route('wms.modo') }}"
-                    @if ($skuActivo && $modo !== $valor) onsubmit="return confirm('Hay un SKU padre activo. ¿Cerrarlo y cambiar de modo?')" @endif>
-                @csrf
-                <input type="hidden" name="modo" value="{{ $valor }}">
-                <button type="submit" @class(['segmented-btn', 'is-active' => $modo === $valor]) aria-pressed="{{ $modo === $valor ? 'true' : 'false' }}">
-                  <x-icon name="{{ $icono }}" class="icon-sm" /> {{ $texto }}
-                </button>
-              </form>
-            @endforeach
-          </div>
-
           @if ($tarimas->isEmpty())
-            <div class="alert alert-info" style="margin-top:16px;">
+            <div class="alert alert-info">
               <x-icon name="info" />
               <div class="alert-body">
-                <p class="alert-title">Crea tu primera tarima</p>
-                <p class="alert-text">Necesitas al menos una tarima para empezar a escanear.</p>
+                <p class="alert-title">Crea tu primer embarque</p>
+                <p class="alert-text">Necesitas al menos un embarque creado para empezar a escanear.</p>
               </div>
             </div>
           @endif
 
-          @if ($modo === 1)
-            @unless ($skuActivo)
-            <form method="POST" action="{{ route('escaneo.padre') }}" style="margin-top:20px;">
+          @unless ($skuActivo)
+            <form method="POST" action="{{ route('escaneo.padre') }}" data-sku-form>
               @csrf
               <fieldset>
-                <div class="field">
-                  <label for="sku" class="label">SKU del modelo <span class="optional">se escanea una vez</span></label>
+                @include('wms.partials.selects')
+
+                <div class="field" style="margin-top:16px;" data-sku-selector data-url="{{ route('escaneo.skus') }}">
+                  <label for="sku" class="label">SKU / modelo <span class="optional">del inventario del almacén</span></label>
                   <div class="control">
-                    <x-icon name="scan" />
-                    <input id="sku" name="sku" value="{{ old('sku') }}" placeholder="Ej. 2364F"
+                    <x-icon name="search" />
+                    <input id="sku" name="sku" value="{{ old('sku') }}" placeholder="Escribe o escanea el SKU o modelo"
                            @class(['input', 'input-lg', 'input-mono', 'is-invalid' => $errors->has('sku')])
-                           autofocus autocomplete="off" spellcheck="false">
-                    <span class="kbd">↵</span>
+                           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sku-opciones"
+                           autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"
+                           @disabled($tarimas->isEmpty()) @if ($tarimas->isNotEmpty()) autofocus @endif data-sku-input>
+                    <button type="button" class="control-action" data-sku-abrir aria-label="Ver SKU del inventario" tabindex="-1">
+                      <x-icon name="chevron-down" class="icon-sm" />
+                    </button>
                   </div>
+                  <ul id="sku-opciones" class="combo-lista" role="listbox" aria-label="SKU del inventario" hidden data-sku-lista></ul>
+                  <p class="hint" data-sku-estado aria-live="polite"></p>
                   @error('sku') <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
                 </div>
 
                 <div class="field">
-                  <label for="descripcion" class="label">Descripción del modelo <span class="optional">opcional</span></label>
-                  <input id="descripcion" name="descripcion" value="{{ old('descripcion') }}"
-                         placeholder="Ej. Bomba hidráulica" class="input">
+                  <label for="descripcion" class="label">Descripción <span class="optional">obtenido del inventario</span></label>
+                  <input id="descripcion" class="input input-derivado" readonly tabindex="-1" placeholder="Se completa al elegir el SKU" data-sku-descripcion>
                 </div>
 
-                <div style="margin-top:16px;">@include('wms.partials.selects')</div>
-
-                <button type="submit" class="btn btn-primary btn-block" style="margin-top:18px;">
-                  <x-icon name="unlock" /> Activar SKU padre
+                <button type="submit" class="btn btn-primary btn-block" style="margin-top:18px;" @disabled($tarimas->isEmpty())>
+                  <x-icon name="unlock" /> Activar SKU
                 </button>
               </fieldset>
             </form>
-            @else
-              <div class="active-sku" role="status" data-sku-activo-tarima="{{ $skuActivo->tarima->uuid }}">
-                <div class="active-sku-top">
-                  <span class="live"><span class="live-dot"></span> SKU activo</span>
-                  <form method="POST" action="{{ route('escaneo.padre.cerrar') }}">
-                    @csrf
-                    <button type="submit" class="btn btn-secondary btn-sm"><x-icon name="x" /> Cerrar SKU</button>
-                  </form>
-                </div>
-                <p class="active-sku-code">{{ $skuActivo->sku }}</p>
-                <div class="active-sku-meta">
-                  <span><x-icon name="layers" /> {{ $skuActivo->tarima->nombre }}</span>
-                  <span><x-icon name="map-pin" /> {{ $skuActivo->destino->codigo }}</span>
-                </div>
-                <div class="active-sku-count">
-                  <b>{{ $skuActivo->numeros_serie_count }}</b>
-                  <small>N/S</small>
-                </div>
-              </div>
-            @endunless
-
-            <div class="divider">Números de serie</div>
-
-            <form method="POST" action="{{ route('escaneo.ns') }}">
-              @csrf
-              <div class="field">
-                <label for="numero_serie" class="label">N/S de la pieza <span class="optional">escanea las veces necesarias</span></label>
-                <div class="control">
-                  <x-icon name="hash" />
-                  <input id="numero_serie" name="numero_serie" placeholder="{{ $skuActivo ? 'Ej. SN-000123' : 'Activa primero un SKU padre' }}"
-                         @class(['input', 'input-lg', 'input-mono', 'is-invalid' => $errors->has('numero_serie')])
-                         autocomplete="off" spellcheck="false"
-                         @disabled(! $skuActivo) @if ($skuActivo) autofocus @endif>
-                  <span class="kbd">↵</span>
-                </div>
-                @error('numero_serie') <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
-              </div>
-              <button type="submit" class="btn btn-primary btn-block" style="margin-top:14px;" @disabled(! $skuActivo)>
-                <x-icon name="plus" /> Agregar N/S
-              </button>
-            </form>
           @else
-            <form method="POST" action="{{ route('escaneo.simple') }}" style="margin-top:20px;">
-              @csrf
-              <div class="field">
-                <label for="sku" class="label">SKU / N/S escaneado</label>
-                <div class="control">
-                  <x-icon name="scan" />
-                  <input id="sku" name="sku" value="{{ old('sku') }}" placeholder="Ej. SKU-10023"
-                         @class(['input', 'input-lg', 'input-mono', 'is-invalid' => $errors->has('sku')])
-                         autofocus autocomplete="off" spellcheck="false">
-                  <span class="kbd">↵</span>
-                </div>
-                @error('sku') <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
+            <div class="active-sku" role="status" data-sku-activo-tarima="{{ $skuActivo->tarima->uuid }}">
+              <div class="active-sku-top">
+                <span class="live"><span class="live-dot"></span> SKU activo</span>
+                <form method="POST" action="{{ route('escaneo.padre.cerrar') }}">
+                  @csrf
+                  <button type="submit" class="btn btn-secondary btn-sm"><x-icon name="x" /> Cerrar SKU</button>
+                </form>
               </div>
-
-              <div class="field">
-                <label for="descripcion" class="label">Descripción <span class="optional">opcional</span></label>
-                <input id="descripcion" name="descripcion" value="{{ old('descripcion') }}" placeholder="Ej. Caja tornillos M8" class="input">
+              <p class="active-sku-code">{{ $skuActivo->sku }}</p>
+              <p class="active-sku-desc">{{ $skuActivo->descripcion_mostrada }}</p>
+              <div class="active-sku-meta">
+                <span><x-icon name="layers" /> {{ $skuActivo->tarima->nombre }}</span>
+                @if ($skuActivo->tarima->almacenOrigen())
+                  <span><x-icon name="map-pin" /> {{ $skuActivo->tarima->almacenOrigen()->etiqueta }}</span>
+                @endif
               </div>
+              <div class="active-sku-count">
+                <b data-total-activo>{{ $skuActivo->numeros_serie_count }}</b>
+                <small>N/S</small>
+              </div>
+            </div>
+          @endunless
 
-              <div style="margin-top:16px;">@include('wms.partials.selects')</div>
+          <div class="divider">Números de serie</div>
 
-              <button type="submit" class="btn btn-primary btn-block" style="margin-top:18px;">
-                <x-icon name="plus" /> Agregar escaneo
+          <form method="POST" action="{{ route('escaneo.ns') }}" data-escaneo-ns>
+            @csrf
+            <div class="field">
+              <label for="numero_serie" class="label">N/S de la pieza <span class="optional">escanea o escribe a mano</span></label>
+              <div class="control">
+                <x-icon name="hash" />
+                <input id="numero_serie" name="numero_serie" placeholder="{{ $skuActivo ? 'Ej. SN-000123' : 'Activa primero un SKU' }}"
+                       @class(['input', 'input-lg', 'input-mono', 'is-invalid' => $errors->has('numero_serie')])
+                       maxlength="150" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" data-escaneo
+                       @disabled(! $skuActivo) @if ($skuActivo) autofocus @endif>
+                <span class="kbd">↵</span>
+                @include('wms.partials.teclado')
+              </div>
+              @error('numero_serie') <p class="field-error" data-error-escaneo><x-icon name="alert" /> {{ $message }}</p> @enderror
+              <p class="field-error" data-error-escaneo hidden></p>
+            </div>
+
+            {{-- Alternativas cuando la etiqueta no tiene código legible. --}}
+            <div class="captura-opciones" role="group" aria-label="Otras formas de capturar la N/S">
+              <button type="button" class="captura-opcion" data-captura-manual @disabled(! $skuActivo)>
+                <x-icon name="keyboard" />
+                <span><b>Escribir a mano</b><small>Sin código de barras legible</small></span>
               </button>
-            </form>
-          @endif
+              <button type="button" class="captura-opcion is-pendiente" disabled aria-disabled="true"
+                      title="Función en desarrollo: todavía no se pueden tomar ni adjuntar fotos.">
+                <x-icon name="camera" />
+                <span><b>Foto del N/S</b><small>Próximamente · no disponible</small></span>
+              </button>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:14px;" @disabled(! $skuActivo)>
+              <x-icon name="plus" /> Agregar N/S
+            </button>
+          </form>
         </div>
       </section>
     </div>
 
     <div>
       <div class="section-head">
-        <h2 class="section-title"><span class="step">2</span> Tarimas</h2>
-        <span class="badge badge-muted">{{ $tarimasConProductos->count() }} con productos</span>
+        <h2 class="section-title"><span class="step">2</span> Embarques escaneados</h2>
+        <span class="badge badge-muted">{{ $tarimasConProductos->count() }} con piezas</span>
       </div>
+      <p class="section-hint">Cada pieza lleva su propia etiqueta: imprímela con <b>Etiquetas</b>, pégala en la pieza y sigue escaneando. Cuando todas tengan etiqueta, <b>Guarda</b> el embarque. Revisa las N/S antes de imprimir: después solo se pueden marcar daños.</p>
 
       <div class="pallets">
         @forelse ($tarimasConProductos as $tarima)
+          @php
+            $seriesTarima = $tarima->registros->flatMap->numerosSerie;
+            $pendientes = $seriesTarima->filter->pendienteRevision();
+            $sinEtiqueta = $seriesTarima->filter->etiquetaPendiente()->count();
+            // Con alguna etiqueta impresa ya no se agregan, editan ni eliminan N/S desde el panel.
+            $conEtiquetas = $seriesTarima->contains(fn ($ns) => ! $ns->etiquetaPendiente());
+            $marcadas = $seriesTarima->filter->tieneAnomalia();
+          @endphp
           <article class="pallet" data-tarima="{{ $tarima->uuid }}">
             <header class="pallet-head">
               <span class="tile"><x-icon name="layers" /></span>
               <div style="min-width:0;">
                 <h3 class="pallet-title">{{ $tarima->nombre }}</h3>
-                <p class="pallet-sub">{{ $tarima->registros->count() }} {{ Str::plural('registro', $tarima->registros->count()) }}</p>
+                <p class="pallet-sub">
+                  {{ $tarima->registros->count() }} {{ Str::plural('registro', $tarima->registros->count()) }}
+                  @if ($tarima->movimiento) · Almacén {{ $tarima->movimiento->nombre }} @endif
+                </p>
               </div>
-              <span class="badge"><x-icon name="package" class="icon-sm" /> {{ $tarima->piezas() }} {{ Str::plural('pieza', $tarima->piezas()) }}</span>
+              <span class="badge"><x-icon name="package" class="icon-sm" /> <span data-piezas>{{ $tarima->piezas() }}</span> {{ Str::plural('pieza', $tarima->piezas()) }}</span>
             </header>
 
             <div class="pallet-body">
+              <datalist id="ns-skus-{{ $tarima->id }}">
+                @foreach ($tarima->registros->where('tipo', TipoRegistro::Padre) as $modelo)
+                  <option value="{{ $modelo->sku }}">{{ $modelo->descripcion_mostrada }}</option>
+                @endforeach
+              </datalist>
               @foreach ($tarima->registros as $registro)
                 @if ($registro->tipo === TipoRegistro::Padre)
-                  <div class="line line-parent">
+                  {{-- En el handheld un modelo con 200 N/S no debe empujar todo hacia abajo:
+                       se ven las últimas lecturas y el resto queda en "Editar números de serie". --}}
+                  <div class="line line-parent" data-registro="{{ $registro->id }}">
                     <div class="line-top">
                       <x-icon name="tag" class="icon-sm" style="color:var(--warn-600)" />
                       <span class="code">{{ $registro->sku }}</span>
-                      <span class="dest"><x-icon name="map-pin" class="icon-sm" style="width:11px;height:11px" />{{ $registro->destino->codigo }}</span>
-                      <span class="badge badge-warn">{{ $registro->numerosSerie->count() }} N/S</span>
+                      <span class="badge badge-warn"><span data-total-registro>{{ $registro->numerosSerie->count() }}</span> N/S</span>
                     </div>
-                    <p class="line-desc" style="margin-top:4px;">{{ $registro->descripcion_mostrada }}</p>
-                    @if ($registro->numerosSerie->isEmpty())
-                      <p class="line-note">Sin números de serie capturados aún.</p>
-                    @else
-                      <div class="chips">
-                        @foreach ($registro->numerosSerie as $ns)
-                          <span class="chip">{{ $ns->numero_serie }}</span>
-                        @endforeach
-                      </div>
-                    @endif
+                    <p class="line-desc">{{ $registro->descripcion_mostrada }}</p>
+                    <p class="line-note" data-sin-ns @if ($registro->numerosSerie->isNotEmpty()) hidden @endif>Sin números de serie capturados aún.</p>
+                    <div class="chips chips-recientes" data-chips data-chips-max="3" aria-label="Últimas N/S" @if ($registro->numerosSerie->isEmpty()) hidden @endif>
+                      @foreach ($registro->numerosSerie->slice(-3) as $ns)
+                        @include('wms.partials.chip', ['ns' => $ns])
+                      @endforeach
+                    </div>
+                    @include('wms.partials.editar-ns', ['tarima' => $tarima, 'registro' => $registro, 'bloqueado' => $conEtiquetas])
                   </div>
                 @else
+                  {{-- Registro histórico sin N/S (modo retirado): solo se muestra. --}}
                   <div class="line line-simple">
                     <span class="code">{{ $registro->sku }}</span>
                     <span class="line-desc">{{ $registro->descripcion_mostrada }}</span>
-                    <span class="dest"><x-icon name="map-pin" class="icon-sm" style="width:11px;height:11px" />{{ $registro->destino->codigo }}</span>
                   </div>
                 @endif
               @endforeach
+
+              @if ($pendientes->isNotEmpty())
+                <p class="revision-resumen" data-revision-resumen>
+                  <x-pendiente-revision />
+                  {{ $pendientes->count() }} N/S sin coincidencia en el inventario: <span class="mono">{{ $pendientes->pluck('numero_serie')->join(', ') }}</span>
+                </p>
+              @endif
+              @if ($marcadas->isNotEmpty())
+                <p class="anomalias-resumen">✕ {{ $marcadas->count() }} N/S marcadas como dañadas: {{ $marcadas->pluck('numero_serie')->join(', ') }}. Al guardar, cada una se registra como incidencia de «Producto dañado».</p>
+              @endif
             </div>
 
             <footer class="pallet-foot">
-              <a class="btn btn-secondary btn-sm" href="{{ route('etiquetas.show', $tarima) }}"><x-icon name="printer" /> Etiqueta</a>
-              <a class="btn btn-secondary btn-sm" href="{{ route('export.tarima', $tarima) }}"><x-icon name="sheet" /> Excel</a>
+              {{-- Una etiqueta por pieza: el contador dice cuántas faltan por imprimir. --}}
+              <a @class(['btn btn-sm', 'btn-accent' => $sinEtiqueta, 'btn-secondary' => ! $sinEtiqueta]) href="{{ route('etiquetas.show', $tarima) }}" data-etiquetas-boton>
+                <x-icon name="printer" /> Etiquetas
+                <span class="badge badge-warn" data-etiquetas-pendientes @unless ($sinEtiqueta) hidden @endunless title="Piezas sin etiqueta impresa">{{ $sinEtiqueta }} sin imprimir</span>
+              </a>
               <span class="spacer"></span>
               @include('wms.partials.borrar', ['tarima' => $tarima])
               @include('wms.partials.guardar', ['tarima' => $tarima])
@@ -254,7 +289,7 @@
             <div class="empty">
               <div class="empty-icon"><x-icon name="inbox" class="icon-xl" /></div>
               <p class="empty-title">Aún no hay productos escaneados</p>
-              <p class="empty-text">Escanea tu primer SKU en el panel de captura y aparecerá aquí agrupado por tarima.</p>
+              <p class="empty-text">Elige un SKU del inventario en el panel de captura y registra sus N/S; aparecerán aquí agrupadas por embarque.</p>
             </div>
           </div>
         @endforelse
@@ -263,23 +298,45 @@
         @if ($vacias->isNotEmpty())
           <div class="empty-pallets">
             <x-icon name="inbox" class="icon-sm" />
-            <span>Tarimas vacías: <b>{{ $vacias->pluck('nombre')->join(', ') }}</b></span>
-            @if (auth()->user()->isAdmin())
-              <span class="btn-group" style="margin-left:auto;">
-                @foreach ($vacias as $tarima)
-                  @include('wms.partials.borrar', ['tarima' => $tarima, 'soloEliminar' => true])
-                @endforeach
-              </span>
-            @endif
+            <span>Embarques vacíos: <b>{{ $vacias->pluck('nombre')->join(', ') }}</b></span>
+            <span class="btn-group" style="margin-left:auto;">
+              @foreach ($vacias as $tarima)
+                @include('wms.partials.borrar', ['tarima' => $tarima, 'soloAnular' => true])
+              @endforeach
+            </span>
+          </div>
+        @endif
+
+        @if ($tarimasDeOtros->isNotEmpty())
+          {{-- Solo lectura: todos ven los embarques de la mudanza, pero cada quien trabaja los suyos. --}}
+          <div class="empty-pallets">
+            <x-icon name="users" class="icon-sm" />
+            <span>En captura por otros:
+              <b>{{ $tarimasDeOtros->map(fn ($t) => $t->codigo.' ('.($t->creador?->name ?? '—').')')->join(', ') }}</b>
+            </span>
           </div>
         @endif
       </div>
     </div>
   </div>
 </main>
+
+{{--
+  Aviso breve del resultado de validar la N/S contra el inventario (no modal:
+  se cierra solo y el escaneo sigue). Una N/S sin coincidencia se registra con
+  su incidencia en el servidor y se señala en su tarjeta (⚠ revisar).
+--}}
+<dialog id="dlgSerie" class="dialog dialog-serie" aria-labelledby="dlgSerieTitulo" aria-describedby="dlgSerieTexto">
+  <div class="dialog-serie-icono" data-serie-icono aria-hidden="true">✓</div>
+  <h2 class="dialog-title" id="dlgSerieTitulo" data-serie-titulo></h2>
+  <p class="dialog-serie-ns mono" data-serie-ns></p>
+  <p class="dialog-text" id="dlgSerieTexto" data-serie-texto></p>
+</dialog>
 @endsection
 
 @push('scripts')
+<script src="{{ asset('js/escaneo.js') }}?v={{ @filemtime(public_path('js/escaneo.js')) }}"></script>
+<script src="{{ asset('js/inventario.js') }}?v={{ @filemtime(public_path('js/inventario.js')) }}"></script>
 <template id="tpl-alerta-success">
   <div class="alert alert-success" data-alert>
     <x-icon name="check-circle" />
