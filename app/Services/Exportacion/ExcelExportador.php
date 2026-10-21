@@ -26,6 +26,16 @@ class ExcelExportador implements ExportadorTarimas {
     ];
 
     /**
+     * Reporte Diario: en lugar del embarque va el folio del tráiler en que se
+     * cargó la pieza (vacío si todavía no se carga).
+     */
+    public const ENCABEZADOS_ENTREGA = [
+        'Consecutivo', 'Número de parte (SKU)', 'Descripción', 'Cantidad',
+        'Unidad de medida', 'Daño', 'Número de serie',
+        'Tráiler', 'Fecha de registro',
+    ];
+
+    /**
      * Manifiesto del tráiler: exactamente estas ocho
      * columnas, en este orden. "Categoría" es la posición de ubicación del
      * inventario. Las filas las arma Manifiesto.
@@ -142,7 +152,7 @@ class ExcelExportador implements ExportadorTarimas {
         $libro = new Spreadsheet();
         $this->llenar(
             $libro->getActiveSheet()->setTitle('Inventario'),
-            [[...self::ENCABEZADOS, 'Novedad', 'Incidencias abiertas'], ...$filas],
+            [[...self::ENCABEZADOS_ENTREGA, 'Novedad', 'Incidencias abiertas'], ...$filas],
             [13, 22, 32, 10, 17, 8, 20, 9, 20, 18, 22],
             self::COLUMNA_NS,
         );

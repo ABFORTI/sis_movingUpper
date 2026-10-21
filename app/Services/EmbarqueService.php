@@ -10,6 +10,7 @@ use App\Models\Partida;
 use App\Models\Tarima;
 use App\Models\User;
 use App\Support\Contador;
+use App\Support\ConversionSku;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -420,8 +421,9 @@ class EmbarqueService {
         return $this->porSku($mudanza, $codigo, $enEmbarque);
     }
 
+    /** Un SKU del catálogo de conversiones también encuentra sus piezas, que quedaron con el SKU convertido. */
     private function porSku(Mudanza $mudanza, string $sku, ?Embarque $enEmbarque): array {
-        $partidas = Partida::with('tarima')->where('mudanza_id', $mudanza->id)->where('sku', $sku)->enTarima()
+        $partidas = Partida::with('tarima')->where('mudanza_id', $mudanza->id)->whereIn('sku', array_filter([$sku, ConversionSku::cambio($sku)]))->enTarima()
             ->when($enEmbarque,
                 fn ($q) => $q->whereHas('carga', fn ($c) => $c->where('embarque_id', $enEmbarque->id)),
                 fn ($q) => $q->whereHas('tarima', fn ($t) => $t->vigentes()))

@@ -220,6 +220,26 @@ class TarimaService {
     }
 
     /**
+     * Embarque adicional: si un embarque guardado se quedó sin piezas porque
+     * todas se movieron a un mismo embarque, pasa a llamarse como ése
+     * ("E-012" → "E-011_adicional"). Si vuelve a tener piezas, o sus piezas
+     * están en varios embarques, recupera su número.
+     */
+    public function actualizarAdicional(Tarima $tarima, ?User $usuario = null): void {
+        $destinos = $tarima->estaGuardada() && ! $tarima->estaAnulada() && ! $tarima->partidas()->exists()
+            ? $tarima->traslados()->distinct()->pluck('tarima_destino_id')
+            : collect();
+        $adicionalDe = $destinos->count() === 1 ? $destinos->first() : null;
+
+        if ($tarima->adicional_de_id !== $adicionalDe) {
+            $antes = $tarima->codigo;
+            $tarima->forceFill(['adicional_de_id' => $adicionalDe])->save();
+            $tarima->unsetRelation('adicionalDe');
+            $this->bitacora->registrar('tarima.renombrada', $usuario, $tarima, ['antes' => $antes, 'despues' => $tarima->codigo]);
+        }
+    }
+
+    /**
      * N/S vivas de un embarque guardado que no tienen partida. Guardar crea la
      * partida de cada pieza en la misma transacción, así que solo pasa si el
      * embarque se marcó como guardado por fuera de guardar() (p. ej. editando
@@ -497,7 +517,7 @@ class TarimaService {
     /**
      * Aplana la tarima a una fila por pieza.
      *
-     * @return Collection<int, array{sku: string, ns: string, descripcion: string, fecha: string, hora: string, registrado: string, tipo: string, registro_id: int, numero_serie_id: ?int, destino_id: ?int, descripcion_original: ?string, pendiente_revision: bool}>
+     * @return Collection<int, array{sku: string, sku_original: ?string, ns: string, descripcion: string, fecha: string, hora: string, registrado: string, tipo: string, registro_id: int, numero_serie_id: ?int, destino_id: ?int, descripcion_original: ?string, pendiente_revision: bool}>
      */
     public function filas(Tarima $tarima): Collection {
         $tarima->cargarDetalle();
@@ -505,6 +525,7 @@ class TarimaService {
         return $tarima->registros->flatMap(function (Registro $r) {
             $base = [
                 'sku' => $r->sku,
+                'sku_original' => $r->sku_original,
                 'descripcion' => $r->descripcion_mostrada,
                 'descripcion_original' => $r->descripcion,
                 'destino_id' => $r->destino_id,

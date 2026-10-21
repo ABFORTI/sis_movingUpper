@@ -1189,6 +1189,8 @@ details.card[open] > .summary-card { padding-bottom: 0; }
 .captura-opcion:not(:disabled):hover { border-color: var(--brand); color: var(--brand); }
 .captura-opcion:disabled { cursor: not-allowed; opacity: .6; }
 .captura-opcion.is-pendiente { border-style: dashed; background: var(--surface-2); opacity: 1; color: var(--text-3); }
+.captura-opcion[aria-busy="true"] { cursor: progress; opacity: .8; }
+[data-foto-estado] { margin: 10px 0 0; }
 @media (max-width: 380px) { .captura-opciones { grid-template-columns: 1fr; } }
 
 /* Estado del último escaneo: aviso (no es error ni éxito pleno) */
@@ -1250,3 +1252,7 @@ tr.is-revision > td { background: #FFFBE6; }
 .skus-alta { margin-top: 8px; font-size: 13px; }
 .skus-alta > summary { cursor: pointer; font-weight: 600; color: var(--brand); min-height: 40px; display: flex; align-items: center; }
 .skus-alta ul { margin: 4px 0 0; padding-left: 18px; max-height: 200px; overflow-y: auto; color: var(--text-2); overflow-wrap: anywhere; }
+
+/* SKU registrado con su equivalente del catálogo de conversiones (x-conversion-sku). */
+.conversion-sku { display: flex; align-items: flex-start; gap: 5px; margin: 4px 0 0; font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+.conversion-sku .icon { flex-shrink: 0; margin-top: 1px; }

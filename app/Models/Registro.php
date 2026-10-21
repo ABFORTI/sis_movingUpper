@@ -15,6 +15,7 @@ class Registro extends Model {
         'tarima_id',
         'tipo',
         'sku',
+        'sku_original',
         'descripcion',
         'destino_id',
         'user_id',
@@ -41,6 +42,11 @@ class Registro extends Model {
 
     public function numerosSerie(): HasMany {
         return $this->hasMany(NumeroSerie::class)->orderBy('id');
+    }
+
+    /** Se registró con el equivalente del catálogo de conversiones; sku_original es el SKU escaneado. */
+    public function fueConvertido(): bool {
+        return $this->sku_original !== null;
     }
 
     public function getDescripcionMostradaAttribute(): string {

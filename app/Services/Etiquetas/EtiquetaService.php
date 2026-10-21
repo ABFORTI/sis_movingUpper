@@ -52,6 +52,8 @@ class EtiquetaService {
      * El modelo que va en la etiqueta: el del renglón del inventario con que
      * coincidió la N/S; si no tiene (o la N/S se registró como incidencia), el
      * del SKU en el inventario del almacén de origen; si tampoco hay, el SKU.
+     * Un SKU convertido (catálogo de conversiones) se imprime como modelo: el
+     * SKU anterior va debajo (EtiquetaPieza).
      *
      * @return array<int, string> por id de N/S
      */
@@ -61,6 +63,9 @@ class EtiquetaService {
 
         return $piezas->mapWithKeys(function (NumeroSerie $ns) use ($carga, &$porSku) {
             $sku = $ns->registro->sku;
+            if ($ns->registro->fueConvertido()) {
+                return [$ns->id => $sku];
+            }
             $modelo = $ns->inventarioItem?->modelo
                 ?: ($porSku[$sku] ??= ($carga ? $this->inventario->sku($carga, $sku)['modelo'] ?? null : null) ?: $sku);
 
@@ -81,7 +86,7 @@ class EtiquetaService {
         $modelos = $this->modelos($tarima, $piezas);
         $embarque = $tarima->loadMissing('mudanza')->identificador;
 
-        return $piezas->map(fn (NumeroSerie $ns) => $this->diseno->lienzo($modelos[$ns->id], $embarque, $ns->numero_serie))->all();
+        return $piezas->map(fn (NumeroSerie $ns) => $this->diseno->lienzo($modelos[$ns->id], $embarque, $ns->numero_serie, $ns->registro->sku_original))->all();
     }
 
     /** @param  list<int>|null  $ids */

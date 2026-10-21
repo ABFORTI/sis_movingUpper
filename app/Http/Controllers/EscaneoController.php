@@ -59,14 +59,15 @@ class EscaneoController extends Controller {
         $registro = $this->escaneo->registrarSkuPadre($tarima, $request->validated('sku'), $request->user());
         $this->skuActivo->activar($registro);
         $request->session()->put('wms.tarima', $tarima->uuid);
+        $conversion = $registro->fueConvertido() ? " Conversión aplicada: {$registro->sku_original} → {$registro->sku}." : '';
 
         if (! $registro->wasRecentlyCreated) {
             $n = $registro->numerosSerie()->count();
 
-            return redirect()->route('wms')->with('ok', "SKU {$registro->sku} reabierto en {$tarima->nombre} (lleva {$n} N/S). Sigue con las N/S.");
+            return redirect()->route('wms')->with('ok', "SKU {$registro->sku} reabierto en {$tarima->nombre} (lleva {$n} N/S). Sigue con las N/S.{$conversion}");
         }
 
-        return redirect()->route('wms')->with('ok', "SKU {$registro->sku} activo en {$tarima->nombre}. Escanea o escribe las N/S.");
+        return redirect()->route('wms')->with('ok', "SKU {$registro->sku} activo en {$tarima->nombre}. Escanea o escribe las N/S.{$conversion}");
     }
 
     public function cerrarPadre(): RedirectResponse {

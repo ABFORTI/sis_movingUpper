@@ -22,6 +22,12 @@ return [
         ],
     ],
 
-
+    // OCR de etiquetas (foto del N/S). Versión fija: un alias "-latest" cambia
+    // de modelo sin aviso y con él la precisión de la lectura.
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash-lite'),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 120),
+    ],
 
 ];

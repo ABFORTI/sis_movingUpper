@@ -18,9 +18,10 @@ class MigracionInventariosTest extends TestCase {
 
     /**
      * Las tres de 2026-10-13, las dos de 2026-10-14 (etiqueta por pieza, posición de ubicación)
-     * y las tres de 2026-10-19 (detalle de movimientos, fecha del Reporte Diario, SKU dados de alta).
+     * las tres de 2026-10-19 (detalle de movimientos, fecha del Reporte Diario, SKU dados de alta)
+     * y las dos de 2026-10-20 (SKU original de las conversiones, embarque adicional).
      */
-    private const PASOS = 8;
+    private const PASOS = 10;
 
     public function test_convierte_los_datos_historicos_y_se_puede_revertir(): void {
         Artisan::call('migrate:fresh');

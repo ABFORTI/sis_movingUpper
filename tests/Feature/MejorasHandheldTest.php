@@ -10,6 +10,7 @@ use App\Models\NumeroSerie;
 use App\Models\Partida;
 use App\Models\Registro;
 use App\Models\Role;
+use App\Models\SkuAlta;
 use App\Models\Tarima;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
@@ -232,6 +233,41 @@ class MejorasHandheldTest extends TestCase {
         ])->assertSessionHasErrors('numero_serie');
     }
 
+    public function test_corregir_puede_dar_de_alta_un_sku_nuevo_al_agregar_o_editar(): void {
+        $tarima = $this->guardar($this->enCaptura(['NS-1', 'NS-2']));
+        $this->actingAs($this->auditor())->get(route('tarimas.corregir', $tarima))->assertOk()->assertSee('Es un SKU nuevo')->assertSee('Otro SKU');
+
+        // Sin la casilla, un SKU que no está en el inventario se sigue rechazando.
+        $editar = ['partida' => Partida::where('numero_serie', 'NS-2')->value('id'), 'sku' => 'NUEVO-9', 'numero_serie' => 'NS-2', 'motivo' => 'SKU equivocado'];
+        $this->put(route('tarimas.partidas.editar', $tarima), $editar)->assertSessionHasErrors('sku');
+        $this->assertSame(0, SkuAlta::count());
+
+        // Con la casilla: se da de alta en el almacén de origen y la pieza pasa a ese SKU.
+        $this->put(route('tarimas.partidas.editar', $tarima), $editar + ['alta_sku' => 1, 'descripcion' => 'Compresor'])->assertSessionHasNoErrors();
+        $alta = SkuAlta::sole();
+        $this->assertSame(['NUEVO-9', 'Compresor', $tarima->almacenOrigen()->id], [$alta->sku, $alta->descripcion, $alta->almacen_id]);
+        $this->assertSame(['NUEVO-9', 2], [Partida::where('numero_serie', 'NS-2')->value('sku'), Partida::where('numero_serie', 'NS-2')->value('consecutivo')]);
+        $this->assertTrue($this->ns('NS-2')->pendienteRevision());
+
+        // Agregar con «Otro SKU»: nuevo modelo en el embarque; si la N/S se rechaza no queda nada.
+        $agregar = ['modelo' => 'otro', 'sku' => 'NUEVO-10', 'alta_sku' => 1, 'motivo' => 'Faltó registrar'];
+        $this->post(route('tarimas.partidas.agregar', $tarima), $agregar + ['numero_serie' => 'NS-1'])->assertSessionHasErrors('numero_serie');
+        $this->assertSame(1, SkuAlta::count());
+        $this->assertFalse(Registro::where('tarima_id', $tarima->id)->where('sku', 'NUEVO-10')->exists());
+
+        $this->post(route('tarimas.partidas.agregar', $tarima), $agregar + ['numero_serie' => 'NS-NUEVA'])->assertSessionHasNoErrors();
+        $partida = Partida::where('numero_serie', 'NS-NUEVA')->sole();
+        $this->assertSame(['NUEVO-10', 3], [$partida->sku, $partida->consecutivo]);
+        $this->assertSame('NUEVO-10', $this->ns('NS-NUEVA')->registro->sku);
+        $this->assertSame(2, SkuAlta::count());
+        $this->assertSame(2, Bitacora::where('accion', 'sku.alta')->count());
+
+        // «Otro SKU» con un SKU que ya existe no necesita la casilla.
+        $this->post(route('tarimas.partidas.agregar', $tarima), ['modelo' => 'otro', 'sku' => 'nuevo-9', 'numero_serie' => 'NS-OTRA', 'motivo' => 'Faltó registrar'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('NUEVO-9', Partida::where('numero_serie', 'NS-OTRA')->value('sku'));
+    }
+
     public function test_eliminar_ns_en_el_historial_queda_registrada_y_libera_la_ns(): void {
         $tarima = $this->guardar($this->enCaptura(['NS-1', 'NS-DOBLE']));
         $partida = Partida::where('numero_serie', 'NS-DOBLE')->sole();
@@ -263,6 +299,33 @@ class MejorasHandheldTest extends TestCase {
         $this->get(route('historial'))->assertSee('Las piezas se movieron al embarque E-002');
         $this->get(app(\App\Services\TarimaService::class)->urlDetalle($origen))
             ->assertSee('Las piezas se movieron al embarque E-002')->assertDontSee('Este embarque está vacío');
+    }
+
+    public function test_un_embarque_con_todas_sus_piezas_trasladadas_se_llama_adicional_del_destino(): void {
+        $destino = $this->guardar($this->enCaptura(['NS-1']));
+        $e2 = $this->guardar($this->enCaptura(['NS-2', 'NS-3']));
+        $e3 = $this->guardar($this->enCaptura(['NS-4']));
+        $this->actingAs($this->auditor());
+        $mover = fn (Tarima $de, array $ns, Tarima $a) => $this->post(route('tarimas.partidas.mover', $de), [
+            'partidas' => Partida::whereIn('numero_serie', $ns)->pluck('id')->all(), 'destino' => $a->uuid, 'motivo' => 'Van juntas en la caja',
+        ])->assertSessionHasNoErrors();
+
+        // Solo una parte: conserva su número.
+        $mover($e2, ['NS-2'], $destino);
+        $this->assertSame('E-002', $e2->fresh()->codigo);
+
+        // Todas al E-001: se llama "E-001_adicional"; el segundo, "E-001_adicional_2".
+        $mover($e2, ['NS-3'], $destino);
+        $mover($e3, ['NS-4'], $destino);
+        $this->assertSame(['Embarque E-001_adicional', 'E-002'], [$e2->fresh()->nombre, $e2->fresh()->codigo_original]);
+        $this->assertSame('E-001_adicional_2', $e3->fresh()->codigo);
+        $this->assertSame(2, Bitacora::where('accion', 'tarima.renombrada')->count());
+        $this->get(route('historial'))->assertSee('Embarque E-001_adicional')->assertSee('(antes E-002)');
+        $this->assertEqualsCanonicalizing([$destino->id, $e2->id, $e3->id], Tarima::filtrosHistorial(['tarima' => 'E-001'])->pluck('id')->all());
+
+        // Si vuelve a tener piezas, recupera su número.
+        $mover($destino, ['NS-4'], $e3);
+        $this->assertSame(['E-003', 'E-001_adicional'], [$e3->fresh()->codigo, $e2->fresh()->codigo]);
     }
 
     // ---------- 4. Reporte Diario ----------

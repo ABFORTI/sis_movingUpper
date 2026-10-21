@@ -158,7 +158,8 @@ class EntregaService {
             ->where('mudanza_id', $mudanza->id)
             ->whereBetween('registrado_at', self::dia($fecha))
             ->whereHas('tarima', fn ($q) => $q->vigentes())
-            ->with(['tarima', 'destino', 'incidenciaPendiente', 'incidencias' => fn ($q) => $q->vigentes()])
+            // La carga más reciente: la del tráiler en que va (o fue) la pieza.
+            ->with(['tarima', 'destino', 'incidenciaPendiente', 'incidencias' => fn ($q) => $q->vigentes(), 'carga' => fn ($q) => $q->latest('id')->with('embarque')])
             ->orderBy('consecutivo')
             ->get();
     }
@@ -192,7 +193,7 @@ class EntregaService {
             ExcelExportador::UNIDAD,
             ExcelExportador::DANO,
             $f['numero_serie'],
-            $f['tarima_numero'],
+            $p->carga?->embarque?->folio,
             $f['registrado_at']?->format('Y-m-d H:i:s'),
             EntregaPartida::NOMBRES[$f['novedad']],
             $p->incidencias->pluck('folio')->join(', '),

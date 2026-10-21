@@ -144,6 +144,9 @@
                 </form>
               </div>
               <p class="active-sku-code">{{ $skuActivo->sku }}</p>
+              @if ($skuActivo->fueConvertido())
+                <x-conversion-sku :original="$skuActivo->sku_original" :sku="$skuActivo->sku" />
+              @endif
               <p class="active-sku-desc">{{ $skuActivo->descripcion_mostrada }}</p>
               <div class="active-sku-meta">
                 <span><x-icon name="layers" /> {{ $skuActivo->tarima->nombre }}</span>
@@ -177,18 +180,16 @@
               <p class="field-error" data-error-escaneo hidden></p>
             </div>
 
-            {{-- Alternativas cuando la etiqueta no tiene código legible. --}}
             <div class="captura-opciones" role="group" aria-label="Otras formas de capturar la N/S">
-              <button type="button" class="captura-opcion" data-captura-manual @disabled(! $skuActivo)>
-                <x-icon name="keyboard" />
-                <span><b>Escribir a mano</b><small>Sin código de barras legible</small></span>
-              </button>
-              <button type="button" class="captura-opcion is-pendiente" disabled aria-disabled="true"
-                      title="Función en desarrollo: todavía no se pueden tomar ni adjuntar fotos.">
+
+              <button  type="button" class="captura-opcion" data-captura-foto data-url="{{ route('escaneo.ocr') }}"
+                      @disabled(! $skuActivo && $tarimas->isEmpty())>
                 <x-icon name="camera" />
-                <span><b>Foto del N/S</b><small>Próximamente · no disponible</small></span>
+                <span><b>Foto del N/S</b><small data-foto-texto>Leer SKU y N/S de la etiqueta</small></span>
               </button>
+              <input type="file" accept="image/*" capture="environment" hidden data-foto-archivo aria-label="Foto de la etiqueta">
             </div>
+            <p class="scan-estado" role="status" aria-live="polite" data-foto-estado hidden></p>
 
             <button type="submit" class="btn btn-primary btn-block" style="margin-top:14px;" @disabled(! $skuActivo)>
               <x-icon name="plus" /> Agregar N/S
@@ -203,7 +204,6 @@
         <h2 class="section-title"><span class="step">2</span> Embarques escaneados</h2>
         <span class="badge badge-muted">{{ $tarimasConProductos->count() }} con piezas</span>
       </div>
-      <p class="section-hint">Cada pieza lleva su propia etiqueta: imprímela con <b>Etiquetas</b>, pégala en la pieza y sigue escaneando. Cuando todas tengan etiqueta, <b>Guarda</b> el embarque. Revisa las N/S antes de imprimir: después solo se pueden marcar daños.</p>
 
       <div class="pallets">
         @forelse ($tarimasConProductos as $tarima)
@@ -236,8 +236,7 @@
               </datalist>
               @foreach ($tarima->registros as $registro)
                 @if ($registro->tipo === TipoRegistro::Padre)
-                  {{-- En el handheld un modelo con 200 N/S no debe empujar todo hacia abajo:
-                       se ven las últimas lecturas y el resto queda en "Editar números de serie". --}}
+
                   <div class="line line-parent" data-registro="{{ $registro->id }}">
                     <div class="line-top">
                       <x-icon name="tag" class="icon-sm" style="color:var(--warn-600)" />
@@ -245,6 +244,9 @@
                       <span class="badge badge-warn"><span data-total-registro>{{ $registro->numerosSerie->count() }}</span> N/S</span>
                     </div>
                     <p class="line-desc">{{ $registro->descripcion_mostrada }}</p>
+                    @if ($registro->fueConvertido())
+                      <x-conversion-sku :original="$registro->sku_original" :sku="$registro->sku" />
+                    @endif
                     <p class="line-note" data-sin-ns @if ($registro->numerosSerie->isNotEmpty()) hidden @endif>Sin números de serie capturados aún.</p>
                     <div class="chips chips-recientes" data-chips data-chips-max="3" aria-label="Últimas N/S" @if ($registro->numerosSerie->isEmpty()) hidden @endif>
                       @foreach ($registro->numerosSerie->slice(-3) as $ns)
@@ -308,7 +310,7 @@
         @endif
 
         @if ($tarimasDeOtros->isNotEmpty())
-          {{-- Solo lectura: todos ven los embarques de la mudanza, pero cada quien trabaja los suyos. --}}
+
           <div class="empty-pallets">
             <x-icon name="users" class="icon-sm" />
             <span>En captura por otros:
@@ -321,11 +323,7 @@
   </div>
 </main>
 
-{{--
-  Aviso breve del resultado de validar la N/S contra el inventario (no modal:
-  se cierra solo y el escaneo sigue). Una N/S sin coincidencia se registra con
-  su incidencia en el servidor y se señala en su tarjeta (⚠ revisar).
---}}
+
 <dialog id="dlgSerie" class="dialog dialog-serie" aria-labelledby="dlgSerieTitulo" aria-describedby="dlgSerieTexto">
   <div class="dialog-serie-icono" data-serie-icono aria-hidden="true">✓</div>
   <h2 class="dialog-title" id="dlgSerieTitulo" data-serie-titulo></h2>
@@ -337,6 +335,7 @@
 @push('scripts')
 <script src="{{ asset('js/escaneo.js') }}?v={{ @filemtime(public_path('js/escaneo.js')) }}"></script>
 <script src="{{ asset('js/inventario.js') }}?v={{ @filemtime(public_path('js/inventario.js')) }}"></script>
+<script src="{{ asset('js/ocr.js') }}?v={{ @filemtime(public_path('js/ocr.js')) }}"></script>
 <template id="tpl-alerta-success">
   <div class="alert alert-success" data-alert>
     <x-icon name="check-circle" />

@@ -15,6 +15,7 @@ use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\IncidenciaController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\ManualController;
+use App\Http\Controllers\OcrController;
 use App\Http\Controllers\PruebaImpresionController;
 use App\Http\Controllers\TarimaController;
 use App\Http\Controllers\WmsController;
@@ -38,6 +39,8 @@ Route::middleware(['auth', 'activo'])->group(function () {
     Route::post('/escaneo/padre/cerrar', [EscaneoController::class, 'cerrarPadre'])->name('escaneo.padre.cerrar');
     Route::post('/escaneo/ns', [EscaneoController::class, 'agregarNumeroSerie'])->name('escaneo.ns');
     Route::get('/escaneo/skus', [EscaneoController::class, 'skus'])->middleware('throttle:240,1')->name('escaneo.skus');
+    // Foto de la etiqueta → SKU y N/S leídos por Gemini. Solo propone: no guarda nada.
+    Route::post('/escaneo/ocr', [OcrController::class, 'analizar'])->middleware('throttle:20,1')->name('escaneo.ocr');
 
     // Inventarios por almacén: todos consultan y exportan; cargar es de supervisión (abajo).
     Route::get('/inventarios', [InventarioController::class, 'index'])->name('inventarios.index');

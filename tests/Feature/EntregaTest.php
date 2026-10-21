@@ -97,6 +97,20 @@ class EntregaTest extends TestCase {
         $this->assertSame($entrega->sha256, Bitacora::where('accion', 'entrega.generada')->sole()->datos['sha256']);
     }
 
+    public function test_la_columna_trailer_muestra_el_folio_del_trailer_en_lugar_del_embarque(): void {
+        $cargada = $this->guardada(['NS-1']);
+        $this->guardada(['NS-2']);
+        $this->actingAs($this->auditor())->post(route('embarques.store'), ['placas' => 'ABC-123'])->assertSessionHasNoErrors();
+        $trailer = \App\Models\Embarque::latest('id')->first();
+        $this->post(route('embarques.cargar', $trailer), ['codigo' => $cargada->identificador])->assertSessionHasNoErrors();
+
+        $inventario = $this->hoja($this->generar(), 'Inventario');
+        $this->assertSame('Tráiler', $inventario[0][7]);
+        $this->assertNotContains('Embarque', $inventario[0]);
+        // La que aún no se carga va sin folio.
+        $this->assertSame(['NS-1' => 'TRL-0001', 'NS-2' => null], array_column(array_slice($inventario, 1), 7, 6));
+    }
+
     public function test_la_siguiente_version_marca_nuevas_cambios_de_tarima_y_las_que_salieron(): void {
         $a = $this->guardada(['NS-1', 'NS-2', 'NS-3']);
         $b = $this->guardada(['NS-4'], 'SKU-B');

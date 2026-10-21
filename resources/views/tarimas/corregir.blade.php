@@ -16,7 +16,7 @@
   <div class="page-head">
     <div>
       <p class="eyebrow"><x-icon name="pencil" class="icon-sm" /> Corrección</p>
-      <h1 class="page-title">Corregir {{ $tarima->nombre }}</h1>
+      <h1 class="page-title">Corregir {{ $tarima->nombre }}@if ($tarima->esAdicional()) <span class="hint">(antes {{ $tarima->codigo_original }})</span>@endif</h1>
       <p class="page-sub">Mueve, retira, elimina, agrega o edita N/S. Cada pieza conserva su consecutivo, el mismo que ya recibió el cliente en el Excel.</p>
     </div>
   </div>
@@ -169,23 +169,39 @@
     @endif
   </form>
 
-  @if ($modelos->isNotEmpty())
+  @php
+    $otroSku = \App\Http\Controllers\CorreccionTarimaController::OTRO_SKU;
+    $altaEn = $almacenOrigen ? "en el {$almacenOrigen->etiqueta}" : 'en el almacén de origen';
+  @endphp
+  @if (! $tarima->estaAnulada())
     <div class="correccion-ns">
-      <form method="POST" action="{{ route('tarimas.partidas.agregar', $tarima) }}" class="card" data-loading>
+      <form method="POST" action="{{ route('tarimas.partidas.agregar', $tarima) }}" class="card" data-loading data-agregar-partida>
         @csrf
         <input type="hidden" name="_form" value="agregar">
         <div class="card-head"><div>
-          <h2 class="card-title"><x-icon name="plus" /> Agregar N/S a este modelo</h2>
-          <p class="card-desc">Una pieza que faltó registrar. Recibe el siguiente consecutivo y solo se imprime su etiqueta.</p>
+          <h2 class="card-title"><x-icon name="plus" /> Agregar N/S</h2>
+          <p class="card-desc">Una pieza que faltó registrar, de un modelo del embarque o de otro SKU. Recibe el siguiente consecutivo y solo se imprime su etiqueta.</p>
         </div></div>
         <div class="card-body">
           <div class="field">
             <label for="ag-modelo" class="label">Modelo (SKU)</label>
-            <select id="ag-modelo" name="modelo" class="input" required>
+            <select id="ag-modelo" name="modelo" class="input" required data-modelo>
               @foreach ($modelos as $m)
-                <option value="{{ $m->id }}" @selected((int) old('modelo') === $m->id)>{{ $m->sku }} · {{ $m->descripcion_mostrada }}</option>
+                <option value="{{ $m->id }}" @selected((string) old('modelo') === (string) $m->id)>{{ $m->sku }} · {{ $m->descripcion_mostrada }}</option>
               @endforeach
+              <option value="{{ $otroSku }}" @selected(old('modelo') === $otroSku || $modelos->isEmpty())>Otro SKU (escribirlo)…</option>
             </select>
+          </div>
+          <div class="field" data-otro-sku>
+            <label for="ag-sku" class="label">SKU</label>
+            <input id="ag-sku" name="sku" value="{{ $formulario === 'agregar' ? old('sku') : '' }}" class="input input-mono" maxlength="100"
+                   autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Escanea o escribe el SKU">
+            <label class="check">
+              <input type="checkbox" class="checkbox" name="alta_sku" value="1" @checked($formulario === 'agregar' && old('alta_sku')) data-alta-sku>
+              <span>Es un SKU nuevo: darlo de alta {{ $altaEn }}</span>
+            </label>
+            <input name="descripcion" value="{{ $formulario === 'agregar' ? old('descripcion') : '' }}" class="input" maxlength="255"
+                   placeholder="Descripción (opcional)" data-alta-descripcion>
           </div>
           <div class="field">
             <label for="ag-ns" class="label">N/S</label>
@@ -197,7 +213,7 @@
             <input id="ag-motivo" name="motivo" value="{{ $formulario === 'agregar' ? old('motivo') : '' }}" class="input" required minlength="5" maxlength="255" placeholder="Ej. Pieza sin escanear al armar el embarque">
           </div>
           @if ($formulario === 'agregar')
-            @foreach (['modelo', 'numero_serie', 'sku', 'motivo', 'partidas'] as $campo)
+            @foreach (['modelo', 'sku', 'descripcion', 'numero_serie', 'motivo', 'partidas'] as $campo)
               @error($campo) <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
             @endforeach
           @endif
@@ -232,6 +248,12 @@
               <input id="ed-sku" name="sku" value="{{ $formulario === 'editar' ? old('sku') : '' }}" list="ed-skus" class="input input-mono" required maxlength="100"
                      autocomplete="off" autocapitalize="characters" spellcheck="false" data-partida-sku>
               <datalist id="ed-skus">@foreach ($modelos as $m)<option value="{{ $m->sku }}">@endforeach</datalist>
+              <label class="check">
+                <input type="checkbox" class="checkbox" name="alta_sku" value="1" @checked($formulario === 'editar' && old('alta_sku')) data-alta-sku>
+                <span>Es un SKU nuevo: darlo de alta {{ $altaEn }}</span>
+              </label>
+              <input name="descripcion" value="{{ $formulario === 'editar' ? old('descripcion') : '' }}" class="input" maxlength="255"
+                     placeholder="Descripción (opcional)" data-alta-descripcion>
             </div>
             <div class="field">
               <label for="ed-ns" class="label">N/S</label>
@@ -243,7 +265,7 @@
               <input id="ed-motivo" name="motivo" value="{{ $formulario === 'editar' ? old('motivo') : '' }}" class="input" required minlength="5" maxlength="255" placeholder="Ej. N/S mal capturada a mano">
             </div>
             @if ($formulario === 'editar')
-              @foreach (['partida', 'sku', 'numero_serie', 'motivo', 'partidas'] as $campo)
+              @foreach (['partida', 'sku', 'descripcion', 'numero_serie', 'motivo', 'partidas'] as $campo)
                 @error($campo) <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
               @endforeach
             @endif
@@ -308,6 +330,29 @@
     });
     if (pieza.value && !form.querySelector('[data-partida-ns]').value) pieza.dispatchEvent(new Event('change'));
   })();
+
+  // Agregar N/S: el campo SKU solo aparece con «Otro SKU».
+  (function () {
+    const form = document.querySelector('[data-agregar-partida]');
+    if (!form) return;
+    const modelo = form.querySelector('[data-modelo]');
+    const otro = form.querySelector('[data-otro-sku]');
+    const mostrar = () => {
+      const activo = modelo.value === @json($otroSku);
+      otro.hidden = !activo;
+      otro.querySelector('input[name="sku"]').required = activo;
+    };
+    modelo.addEventListener('change', mostrar);
+    mostrar();
+  })();
+
+  // «Es un SKU nuevo»: la descripción opcional solo se pide al marcarla.
+  document.querySelectorAll('[data-alta-sku]').forEach(casilla => {
+    const descripcion = casilla.closest('.field').querySelector('[data-alta-descripcion]');
+    const mostrar = () => { descripcion.hidden = !casilla.checked; };
+    casilla.addEventListener('change', mostrar);
+    mostrar();
+  });
 
   // Con el escáner: cada N/S leída (texto + Enter) marca su pieza y limpia el campo
   // para la siguiente. El Enter nunca envía el formulario.

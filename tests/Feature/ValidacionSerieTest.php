@@ -8,7 +8,6 @@ use App\Models\Partida;
 use App\Models\Tarima;
 use App\Models\User;
 use App\Services\TarimaService;
-use Illuminate\Support\Facades\Route;
 use Tests\Feature\Concerns\PreparaWms;
 use Tests\TestCase;
 
@@ -152,7 +151,7 @@ class ValidacionSerieTest extends TestCase {
         $this->assertSame(1, NumeroSerie::count());
     }
 
-    public function test_la_captura_manual_es_funcional_y_la_foto_solo_un_control_pendiente(): void {
+    public function test_la_captura_manual_y_la_foto_del_ns_estan_disponibles(): void {
         // Escrita a mano (con el teclado) llega igual que escaneada y se valida igual.
         $this->actingAs($this->op)->post(route('escaneo.ns'), ['numero_serie' => 'ns-bbb'])->assertSessionHasNoErrors()
             ->assertSessionHas('ok', 'N/S NS-BBB encontrada en el inventario (Número de serie). 1 en total.');
@@ -160,12 +159,12 @@ class ValidacionSerieTest extends TestCase {
         $html = $this->get(route('wms'))->assertOk()->getContent();
         $this->assertStringContainsString('data-captura-manual', $html);
         $this->assertStringContainsString('Escribir a mano', $html);
-        $this->assertMatchesRegularExpression('/<button[^>]*is-pendiente[^>]*disabled[^>]*aria-disabled="true"/s', $html);
-        $this->assertStringContainsString('Próximamente · no disponible', $html);
-        // Sin backend de fotografía.
-        $this->assertSame([], collect(Route::getRoutes()->getRoutes())->filter(fn ($r) => str_contains($r->uri(), 'foto'))->all());
-        $this->assertStringNotContainsString('type="file"', $html);
-        $this->assertStringNotContainsString('capture=', $html);
+        // Foto del N/S: habilitada, con cámara trasera y su ruta de lectura (OcrTest cubre el backend).
+        $this->assertStringNotContainsString('is-pendiente', $html);
+        $this->assertStringNotContainsString('Próximamente · no disponible', $html);
+        $this->assertMatchesRegularExpression('/<button[^>]*data-captura-foto(?![^>]*disabled)[^>]*>/s', $html);
+        $this->assertStringContainsString('capture="environment"', $html);
+        $this->assertStringContainsString(route('escaneo.ocr'), $html);
     }
 
     public function test_las_ns_pendientes_se_senalan_en_todas_las_vistas_y_desaparecen_al_resolver(): void {

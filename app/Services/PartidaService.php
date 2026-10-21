@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Enums\TipoRegistro;
+use App\Models\InventarioCarga;
 use App\Models\MovimientoPartida;
 use App\Models\NumeroSerie;
 use App\Models\Partida;
 use App\Models\Registro;
 use App\Models\Tarima;
 use App\Models\User;
+use App\Services\Inventario\InventarioService;
 use App\Support\Contador;
 use App\Support\NumeroSerieNormalizado;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -34,6 +36,7 @@ class PartidaService {
         private readonly BitacoraService $bitacora,
         private readonly EscaneoService $escaneo,
         private readonly IncidenciaService $incidencias,
+        private readonly InventarioService $inventario,
     ) { }
 
     /** @param list<int> $ids */
@@ -66,6 +69,8 @@ class PartidaService {
             // La etiqueta pegada en cada pieza movida trae el número del embarque anterior.
             NumeroSerie::whereKey($partidas->pluck('numero_serie_id')->filter()->all())->update(['etiqueta_impresa_at' => null]);
             $this->pedirReimpresion($destino);
+            $this->tarimas->actualizarAdicional($origen, $usuario);
+            $this->tarimas->actualizarAdicional($destino, $usuario);
 
             $this->bitacora->registrar('partidas.movidas', $usuario, $origen, [
                 'de' => $origen->identificador,
@@ -189,6 +194,7 @@ class PartidaService {
                         $this->escaneo->pista($carga, $modelo->sku, $capturada), collect([$partida]));
                 }
                 $this->pedirReimpresion($tarima);
+                $this->tarimas->actualizarAdicional($tarima, $usuario);
 
                 $this->bitacora->registrar('numero_serie.agregada', $usuario, $tarima, [
                     'tarima' => $tarima->identificador, 'sku' => $modelo->sku, 'numero_serie' => $valor, 'consecutivo' => $partida->consecutivo,
@@ -202,24 +208,40 @@ class PartidaService {
     }
 
     /**
+     * "Agregar N/S" con un SKU escrito: usa el modelo del embarque para ese SKU
+     * (se crea si no está) y, con $altaSku, da de alta el SKU en el almacén de
+     * origen si no viene en su inventario. Todo en una transacción: si la N/S
+     * se rechaza, no quedan ni el modelo ni el alta.
+     */
+    public function agregarConSku(Tarima $tarima, string $sku, bool $altaSku, ?string $descripcion, string $capturada, User $usuario, string $motivo): NumeroSerie {
+        $this->validarOrigen($tarima);
+        $carga = $this->escaneo->inventarioDe($tarima, 'sku');
+
+        return DB::transaction(fn () => $this->agregar(
+            $tarima, $this->escaneo->modeloEn($tarima, $this->producto($carga, $sku, $altaSku, $descripcion, $usuario), $usuario), $capturada, $usuario, $motivo,
+        ));
+    }
+
+    /**
      * "Editar N/S" en un embarque guardado: corrige el número de serie, el SKU o
      * ambos. La pieza conserva su consecutivo; si cambia el SKU pasa a ese
      * modelo dentro del mismo embarque. Se valida igual que una lectura nueva y
      * el cambio queda en su movimiento (antes → después). Su etiqueta ya no
-     * coincide: el embarque queda con reimpresión pendiente.
+     * coincide: el embarque queda con reimpresión pendiente. Con $altaSku, un
+     * SKU que no está en el inventario se da de alta en el almacén de origen.
      */
-    public function editar(Tarima $tarima, int $partidaId, string $sku, string $capturada, User $usuario, string $motivo): NumeroSerie {
+    public function editar(Tarima $tarima, int $partidaId, string $sku, string $capturada, User $usuario, string $motivo, bool $altaSku = false, ?string $descripcion = null): NumeroSerie {
         $this->validarOrigen($tarima);
         $capturada = NumeroSerieNormalizado::limpio($capturada);
         if ($capturada === '') {
             throw ValidationException::withMessages(['numero_serie' => 'Escribe la N/S.']);
         }
         $carga = $this->escaneo->inventarioDe($tarima, 'sku');
-        $producto = $this->escaneo->productoDe($carga, $sku);
 
         try {
-            return DB::transaction(function () use ($tarima, $partidaId, $producto, $carga, $capturada, $usuario, $motivo) {
+            return DB::transaction(function () use ($tarima, $partidaId, $sku, $altaSku, $descripcion, $carga, $capturada, $usuario, $motivo) {
                 $this->bloquear($tarima);
+                $producto = $this->producto($carga, $sku, $altaSku, $descripcion, $usuario);
                 $partida = $this->partidasDe($tarima, [$partidaId])->first();
                 if ($partida->numero_serie_id === null) {
                     throw ValidationException::withMessages(['partidas' => 'Solo se editan piezas con número de serie.']);
@@ -281,6 +303,25 @@ class PartidaService {
         } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages(['numero_serie' => "La N/S {$capturada} se acaba de registrar en otra captura."]);
         }
+    }
+
+    /**
+     * El producto del inventario del almacén de origen. Si el SKU no está ahí y
+     * se pidió darlo de alta, se da de alta solo con su código (como en
+     * Inventarios); si no, se rechaza para no asignar un SKU mal escrito.
+     */
+    private function producto(InventarioCarga $carga, string $sku, bool $altaSku, ?string $descripcion, User $usuario): array {
+        if ($this->inventario->sku($carga, $sku) === null) {
+            if (! $altaSku) {
+                throw ValidationException::withMessages([
+                    'sku' => "El SKU {$sku} no está en el inventario del {$carga->almacen->etiqueta}. Si es un SKU nuevo, marca «Es un SKU nuevo» para darlo de alta.",
+                ]);
+            }
+            $alta = $this->inventario->darDeAltaSku($carga->almacen, $sku, $descripcion, $usuario);
+            $this->bitacora->registrar('sku.alta', $usuario, $alta, ['almacen' => $carga->almacen->codigo, 'sku' => $alta->sku]);
+        }
+
+        return $this->escaneo->productoDe($carga, $sku);
     }
 
     private function validarOrigen(Tarima $origen): void {
@@ -346,6 +387,7 @@ class PartidaService {
             'tarima_id' => $destino->id,
             'tipo' => TipoRegistro::Padre,
             'sku' => $partida->sku,
+            'sku_original' => $partida->registro?->sku_original,
             'descripcion' => $partida->descripcion,
             'destino_id' => $partida->destino_id,
             'user_id' => $usuario->id,

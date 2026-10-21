@@ -28,6 +28,7 @@ class CorreccionTarimaController extends Controller {
         'numero_serie.*' => 'Escanea o escribe la N/S (hasta 150 caracteres).',
         'sku.*' => 'Escribe el SKU de la pieza.',
         'partida.*' => 'Elige la pieza que quieres editar.',
+        'descripcion.*' => 'La descripción admite hasta 255 caracteres.',
     ];
 
     public function __construct(
@@ -43,6 +44,7 @@ class CorreccionTarimaController extends Controller {
             'destinos' => Tarima::vigentes()->where('mudanza_id', $tarima->mudanza_id)
                 ->whereKeyNot($tarima->id)->orderBy('numero')->get(),
             'modelos' => Registro::where('tarima_id', $tarima->id)->where('tipo', TipoRegistro::Padre)->orderBy('sku')->get(),
+            'almacenOrigen' => $tarima->loadMissing('movimiento.origen')->almacenOrigen(),
             'trasladadas' => $tarima->partidas->isEmpty() ? $tarima->trasladadaA() : collect(),
             // Guardado sin partidas (inconsistencia): sus N/S existen pero no tienen consecutivo.
             'sinPartida' => $this->tarimas->piezasSinPartida($tarima),
@@ -97,28 +99,40 @@ class CorreccionTarimaController extends Controller {
             ->with('ok', "{$n} ".($n === 1 ? 'N/S eliminada' : 'N/S eliminadas')." del {$tarima->nombre}. Las etiquetas de las demás piezas no cambian.");
     }
 
+    /** «Otro SKU» en Agregar N/S: se escribe el SKU (y, si es nuevo, se da de alta). */
+    public const OTRO_SKU = 'otro';
+
     public function agregar(Request $request, Tarima $tarima): RedirectResponse {
         $datos = $request->validate([
-            'modelo' => ['required', 'integer'],
+            'modelo' => ['required', 'regex:/^(\d+|'.self::OTRO_SKU.')$/'],
+            'sku' => ['exclude_unless:modelo,'.self::OTRO_SKU, 'required', 'string', 'max:100'],
+            'descripcion' => ['nullable', 'string', 'max:255'],
             'numero_serie' => ['required', 'string', 'max:150'],
             'motivo' => self::REGLAS['motivo'],
         ], self::MENSAJES);
-        $modelo = Registro::where('tarima_id', $tarima->id)->findOrFail($datos['modelo']);
 
-        $serie = $this->partidas->agregar($tarima, $modelo, $datos['numero_serie'], $request->user(), $datos['motivo']);
+        if ($datos['modelo'] === self::OTRO_SKU) {
+            $serie = $this->partidas->agregarConSku($tarima, $datos['sku'], $request->boolean('alta_sku'), $datos['descripcion'] ?? null,
+                $datos['numero_serie'], $request->user(), $datos['motivo']);
+        } else {
+            $modelo = Registro::where('tarima_id', $tarima->id)->findOrFail((int) $datos['modelo']);
+            $serie = $this->partidas->agregar($tarima, $modelo, $datos['numero_serie'], $request->user(), $datos['motivo']);
+        }
 
-        return $this->conReimpresion($tarima, $serie, "N/S {$serie->numero_serie} agregada al SKU {$modelo->sku}.");
+        return $this->conReimpresion($tarima, $serie, "N/S {$serie->numero_serie} agregada al SKU {$serie->registro->sku}.");
     }
 
     public function editar(Request $request, Tarima $tarima): RedirectResponse {
         $datos = $request->validate([
             'partida' => ['required', 'integer'],
             'sku' => ['required', 'string', 'max:100'],
+            'descripcion' => ['nullable', 'string', 'max:255'],
             'numero_serie' => ['required', 'string', 'max:150'],
             'motivo' => self::REGLAS['motivo'],
         ], self::MENSAJES);
 
-        $serie = $this->partidas->editar($tarima, (int) $datos['partida'], $datos['sku'], $datos['numero_serie'], $request->user(), $datos['motivo']);
+        $serie = $this->partidas->editar($tarima, (int) $datos['partida'], $datos['sku'], $datos['numero_serie'], $request->user(), $datos['motivo'],
+            $request->boolean('alta_sku'), $datos['descripcion'] ?? null);
 
         return $this->conReimpresion($tarima, $serie, "N/S actualizada: {$serie->numero_serie} (SKU {$serie->registro->sku}).");
     }

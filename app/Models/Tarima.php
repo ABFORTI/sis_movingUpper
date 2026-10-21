@@ -119,7 +119,10 @@ class Tarima extends Model {
                 // "E-004", "Embarque 4", "004" o "4" (y el "T-004" de las etiquetas viejas); si
                 // escriben el número completo ("MUD-0001 · E-004") se toma lo que sigue a la última E o T.
                 $numero = preg_replace('/\D/', '', preg_replace('/^.*[ET]/i', '', $valor));
-                $q->where('numero', $numero === '' ? 0 : (int) $numero);
+                // "E-011" también trae sus adicionales ("E-011_adicional").
+                $numero = $numero === '' ? 0 : (int) $numero;
+                $q->where(fn (Builder $q) => $q->where('numero', $numero)
+                    ->orWhereIn('adicional_de_id', self::where('numero', $numero)->select('id')));
             })
             ->when($filtros['descripcion'] ?? null, fn (Builder $q, string $valor) => $q->whereHas(
                 'registros',
@@ -151,11 +154,24 @@ class Tarima extends Model {
      * @return \Illuminate\Support\Collection<int, string>
      */
     public function trasladadaA(): \Illuminate\Support\Collection {
-        return MovimientoPartida::with('destino')
+        return $this->traslados()->with('destino')->get()->pluck('destino.codigo')->filter()->unique()->sort()->values();
+    }
+
+    /** Movimientos de piezas que salieron de este embarque y siguen en el embarque al que llegaron. */
+    public function traslados(): Builder {
+        return MovimientoPartida::query()
             ->where('tipo', MovimientoPartida::CAMBIO_TARIMA)
             ->where('tarima_origen_id', $this->id)
-            ->whereHas('partida', fn (Builder $q) => $q->where('estado', Partida::EN_TARIMA)->whereColumn('partidas.tarima_id', 'movimientos_partida.tarima_destino_id'))
-            ->get()->pluck('destino.codigo')->filter()->unique()->sort()->values();
+            ->whereHas('partida', fn (Builder $q) => $q->where('estado', Partida::EN_TARIMA)->whereColumn('partidas.tarima_id', 'movimientos_partida.tarima_destino_id'));
+    }
+
+    /** Embarque al que se movieron todas sus piezas: éste se llama como aquél con "_adicional". */
+    public function adicionalDe(): BelongsTo {
+        return $this->belongsTo(self::class, 'adicional_de_id');
+    }
+
+    public function esAdicional(): bool {
+        return $this->adicional_de_id !== null;
     }
 
     /** Ya salió de la impresora la etiqueta de al menos una de sus piezas. */
@@ -175,6 +191,18 @@ class Tarima extends Model {
      * caja de un tráiler); la tabla y las clases conservan el nombre "tarima".
      */
     public function getCodigoAttribute(): string {
+        if (! $this->esAdicional() || ! $this->adicionalDe) {
+            return $this->codigo_original;
+        }
+
+        // Varios adicionales del mismo embarque: "E-011_adicional", "E-011_adicional_2"…
+        $orden = self::where('adicional_de_id', $this->adicional_de_id)->where('numero', '<', $this->numero)->count() + 1;
+
+        return $this->adicionalDe->codigo_original.'_adicional'.($orden > 1 ? "_{$orden}" : '');
+    }
+
+    /** "E-012": el número con que se creó, aunque hoy se llame "E-011_adicional". */
+    public function getCodigoOriginalAttribute(): string {
         return 'E-'.str_pad((string) $this->numero, 3, '0', STR_PAD_LEFT);
     }
 

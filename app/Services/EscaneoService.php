@@ -10,6 +10,7 @@ use App\Models\Registro;
 use App\Models\Tarima;
 use App\Models\User;
 use App\Services\Inventario\InventarioService;
+use App\Support\ConversionSku;
 use App\Support\NumeroSerieNormalizado;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -229,11 +230,24 @@ class EscaneoService {
         return [$valor, $item, $existente];
     }
 
-    /** El SKU tal como está en el inventario del almacén (sku, modelo, descripción), o un error claro. */
+    /**
+     * El SKU tal como está en el inventario del almacén (sku, modelo,
+     * descripción), o un error claro. Si ese SKU está en el catálogo de
+     * conversiones, `sku` es su equivalente y `sku_original` el del inventario;
+     * si no, `sku_original` es null. Pedirlo con el SKU ya convertido da lo
+     * mismo: la conversión no se aplica dos veces.
+     *
+     * @return array{sku: string, sku_original: ?string, modelo: ?string, descripcion: ?string, alta: bool}
+     */
     public function productoDe(InventarioCarga $carga, string $sku): array {
-        return $this->inventario->sku($carga, $sku) ?? throw ValidationException::withMessages([
+        $producto = $this->inventario->sku($carga, $sku) ?? throw ValidationException::withMessages([
             'sku' => "El SKU {$sku} no está en el inventario del {$carga->almacen->etiqueta}. Elígelo de la lista.",
         ]);
+        $cambio = ConversionSku::cambio($producto['sku']);
+
+        return $cambio === null
+            ? $producto + ['sku_original' => null]
+            : ['sku' => $cambio, 'sku_original' => $producto['sku']] + $producto;
     }
 
     /** Sugerencia para una N/S sin coincidencia (p. ej. "existe en otro SKU"). */
@@ -251,6 +265,7 @@ class EscaneoService {
         return $existente ?? $tarima->registros()->create([
             'tipo' => TipoRegistro::Padre,
             'sku' => $producto['sku'],
+            'sku_original' => $producto['sku_original'] ?? null,
             'descripcion' => $producto['descripcion'] ?? $producto['modelo'],
             'user_id' => $usuario->id,
         ]);

@@ -103,11 +103,15 @@
             @foreach ($tarimas as $tarima)
               @php
                 $skus = $tarima->registros->pluck('sku');
+                $convertidos = $tarima->registros->filter->fueConvertido()->unique('sku');
                 $pendientes = $tarima->registros->flatMap->numerosSerie->filter->pendienteRevision();
               @endphp
               <tr>
                 <td data-label="Embarque">
                   <b class="nowrap">{{ $tarima->nombre }}</b>
+                  @if ($tarima->esAdicional())
+                    <span class="hint nowrap">(antes {{ $tarima->codigo_original }})</span>
+                  @endif
                   @if ($tarima->requiereReimpresion() && ! $tarima->estaAnulada())
                     <span class="badge badge-warn" title="Llegaron piezas movidas desde otro embarque: su etiqueta trae el número anterior">Reimprimir</span>
                   @endif
@@ -133,6 +137,9 @@
                       <span class="chip" title="{{ $skus->slice(3)->join(', ') }}">+{{ $skus->count() - 3 }}</span>
                     @endif
                   </div>
+                  @foreach ($convertidos as $registro)
+                    <x-conversion-sku :original="$registro->sku_original" :sku="$registro->sku" />
+                  @endforeach
                 </td>
                 <td data-label="Movimiento"><span class="mono">{{ $tarima->movimiento?->nombre ?? '—' }}</span></td>
                 <td data-label="Piezas">

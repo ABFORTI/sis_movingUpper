@@ -7,6 +7,10 @@ namespace App\Services\Etiquetas;
  * su N/S. Se imprime una por pieza escaneada; ninguna representa al embarque
  * completo.
  *
+ * Si el SKU se convirtió (catálogo de conversiones), el modelo es el SKU
+ * convertido, en un tamaño máximo menor, y debajo va "SKU anterior: …"; el
+ * resto de la etiqueta no se mueve.
+ *
  * El código de barras es Code 128 (la misma simbología que ya leían las
  * handhelds en el andén) y codifica el N/S tal como quedó registrado: al
  * escanearlo se obtiene ese N/S, sin prefijos ni búsquedas adicionales. Debajo
@@ -28,6 +32,9 @@ class EtiquetaPieza {
     private const Y_MODELO = 2;
     private const Y_EMBARQUE = 13.5;
     private const MODELO_MAX = 8;
+    /** Con SKU convertido: el modelo baja a 5.25 mm para que quepa debajo el SKU anterior (10.5 a 13 mm). */
+    private const MODELO_CONVERTIDO_MAX = 5.25;
+    private const Y_SKU_ANTERIOR = 10.5;
     private const EMBARQUE_MAX = 7;
     private const VALOR_MIN = 3.5;
     private const Y_BARRAS = 25;
@@ -45,14 +52,17 @@ class EtiquetaPieza {
         return $numeroSerie !== '' && preg_match('/^[\x20-\x7E]+$/', $numeroSerie) === 1;
     }
 
-    public function lienzo(string $modelo, string $embarque, string $numeroSerie): Lienzo {
+    public function lienzo(string $modelo, string $embarque, string $numeroSerie, ?string $skuAnterior = null): Lienzo {
         $f = $this->formato;
         $mm = fn (float $v) => $f->dots($v);
         $l = new Lienzo($f);
         $x = $f->margenX;
         $ancho = $f->anchoUtil();
 
-        $this->campo($l, $mm(self::Y_MODELO), 'Modelo', $modelo, self::MODELO_MAX);
+        $this->campo($l, $mm(self::Y_MODELO), 'Modelo', $modelo, $skuAnterior === null ? self::MODELO_MAX : self::MODELO_CONVERTIDO_MAX);
+        if ($skuAnterior !== null) {
+            $l->texto($x, $mm(self::Y_SKU_ANTERIOR), $ancho, $mm(self::ROTULO), "SKU anterior: {$skuAnterior}", 'L');
+        }
         $this->campo($l, $mm(self::Y_EMBARQUE), 'Embarque', $embarque, self::EMBARQUE_MAX);
 
         $yBarras = $mm(self::Y_BARRAS);

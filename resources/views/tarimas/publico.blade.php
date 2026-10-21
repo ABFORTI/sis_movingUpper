@@ -67,7 +67,12 @@
             @foreach ($filas as $i => $fila)
               <tr @class(['is-revision' => $fila['pendiente_revision']])>
                 <td class="num c-num" data-label="#">{{ $i + 1 }}</td>
-                <td class="c-sku" data-label="SKU"><span class="code">{{ $fila['sku'] }}</span></td>
+                <td class="c-sku" data-label="SKU">
+                  <span class="code">{{ $fila['sku'] }}</span>
+                  @if ($fila['sku_original'])
+                    <x-conversion-sku :original="$fila['sku_original']" :sku="$fila['sku']" />
+                  @endif
+                </td>
                 <td class="c-ns" data-label="N/S">
                   <span class="mono" style="font-size:13px;">{{ $fila['ns'] }}</span>
                   @if ($fila['pendiente_revision'])

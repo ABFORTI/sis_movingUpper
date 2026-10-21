@@ -7,6 +7,7 @@ use App\Models\InventarioCarga;
 use App\Models\InventarioItem;
 use App\Models\SkuAlta;
 use App\Models\User;
+use App\Support\ConversionSku;
 use App\Support\NumeroSerieNormalizado;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -72,21 +73,26 @@ class InventarioService {
     /**
      * El SKU tal como está en el inventario, con su descripción; si no está en
      * esa carga, el dado de alta a mano en su almacén (alta: true); null si no
-     * existe en ninguno.
+     * existe en ninguno. Un SKU del catálogo de conversiones se busca primero
+     * tal cual y luego con sus equivalentes (ConversionSku).
      */
     public function sku(InventarioCarga $carga, string $sku): ?array {
-        $norm = NumeroSerieNormalizado::de($sku);
-        $item = InventarioItem::where('inventario_carga_id', $carga->id)
-            ->where('sku_norm', $norm)
-            ->orderBy('id')
-            ->first(['sku', 'modelo', 'descripcion']);
-        if ($item) {
-            return ['sku' => $item->sku, 'modelo' => $item->modelo, 'descripcion' => $item->descripcion, 'alta' => false];
+        foreach (ConversionSku::equivalentes($sku) as $norm) {
+            $item = InventarioItem::where('inventario_carga_id', $carga->id)
+                ->where('sku_norm', $norm)
+                ->orderBy('id')
+                ->first(['sku', 'modelo', 'descripcion']);
+            if ($item) {
+                return ['sku' => $item->sku, 'modelo' => $item->modelo, 'descripcion' => $item->descripcion, 'alta' => false];
+            }
+
+            $alta = SkuAlta::where('almacen_id', $carga->almacen_id)->where('sku_norm', $norm)->first();
+            if ($alta) {
+                return self::deAlta($alta);
+            }
         }
 
-        $alta = SkuAlta::where('almacen_id', $carga->almacen_id)->where('sku_norm', $norm)->first();
-
-        return $alta ? self::deAlta($alta) : null;
+        return null;
     }
 
     /**
@@ -133,7 +139,8 @@ class InventarioService {
     /**
      * Renglones del SKU cuyo número de serie del fabricante, número de serie o
      * número de serie de lote coincide con lo capturado. Cada renglón trae en
-     * `campo` el primero de los tres que coincidió.
+     * `campo` el primero de los tres que coincidió. Un SKU convertido coincide
+     * también con los renglones de su SKU original (y al revés).
      *
      * @return Collection<int, InventarioItem>
      */
@@ -144,7 +151,7 @@ class InventarioService {
         }
 
         return InventarioItem::where('inventario_carga_id', $carga->id)
-            ->where('sku_norm', NumeroSerieNormalizado::de($sku))
+            ->whereIn('sku_norm', ConversionSku::equivalentes($sku))
             ->where(fn (Builder $q) => $q
                 ->where('ns_fabricante_norm', $ns)
                 ->orWhere('numero_serie_norm', $ns)
@@ -170,7 +177,7 @@ class InventarioService {
         $porSerie = fn (Builder $q) => $q->where('ns_fabricante_norm', $ns)->orWhere('numero_serie_norm', $ns)->orWhere('ns_lote_norm', $ns);
 
         $otroSku = InventarioItem::where('inventario_carga_id', $carga->id)
-            ->where('sku_norm', '!=', NumeroSerieNormalizado::de($sku))
+            ->whereNotIn('sku_norm', ConversionSku::equivalentes($sku))
             ->where($porSerie)->value('sku');
         if ($otroSku !== null) {
             return "En este almacén esa N/S pertenece al SKU {$otroSku}, no al {$sku}.";
