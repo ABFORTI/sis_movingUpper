@@ -47,7 +47,6 @@ class TarimaController extends Controller {
             $skuActivo->cerrar();
         }
 
-        // En captura, anular elimina el embarque; uno guardado se anula sin borrar nada.
         if (! $tarima->estaGuardada()) {
             $reutiliza = $this->tarimas->eliminar($tarima, $request->user(), $motivo);
             if ($request->session()->get('wms.tarima') === $tarima->uuid) {
@@ -64,11 +63,7 @@ class TarimaController extends Controller {
         return back(fallback: route('historial'))->with('warn', "{$tarima->nombre} anulado. Conserva su número y su contenido queda en el registro.");
     }
 
-    /**
-     * Confirmación de que las etiquetas de `piezas` salieron bien. `impresa`
-     * indica que quedó registrada; `pendientes`, cuántas piezas del embarque
-     * siguen sin etiqueta (con 0 ya se puede guardar).
-     */
+    
     public function marcarImpresa(Request $request, Tarima $tarima, ImpresionService $impresiones): JsonResponse {
         $pendientes = $impresiones->registrar($tarima, $request->user(), EtiquetaService::ids($request->input('piezas')));
 
@@ -104,10 +99,7 @@ class TarimaController extends Controller {
         ]);
     }
 
-    /**
-     * Piezas del embarque y en qué va cada una (sin cargar, cargada en un
-     * tráiler, recibida…), para verificar cuáles ya se incorporaron al traslado.
-     */
+
     public function publico(Tarima $tarima, EmbarqueService $embarques): View {
         $situaciones = Partida::with('carga.embarque')->where('tarima_id', $tarima->id)->whereNotNull('numero_serie_id')->get()
             ->mapWithKeys(fn (Partida $p) => [

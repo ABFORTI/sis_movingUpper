@@ -16,15 +16,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Ciclo de vida de la mudanza. Cada transición valida el estado de origen
- * dentro de una transacción con la fila bloqueada, y queda en la bitácora.
- *
- *   borrador ─activar→ activa ─suspender→ suspendida ─reanudar→ activa
- *   activa ─iniciar_cierre→ en_cierre ─cerrar→ cerrada
- *   en_cierre ─reabrir→ activa;  cerrada ─reabrir→ en_cierre
- *   borrador | activa | suspendida ─cancelar→ cancelada
- */
+
 class MudanzaService {
     public const ACTIVAR = 'activar';
     public const SUSPENDER = 'suspender';
@@ -34,7 +26,7 @@ class MudanzaService {
     public const REABRIR = 'reabrir';
     public const CANCELAR = 'cancelar';
 
-    /** acción => [estados de origen, estado destino, requiere motivo] */
+
     public const TRANSICIONES = [
         self::ACTIVAR => [[Mudanza::BORRADOR], Mudanza::ACTIVA, false],
         self::SUSPENDER => [[Mudanza::ACTIVA], Mudanza::SUSPENDIDA, true],
@@ -55,7 +47,7 @@ class MudanzaService {
         self::CANCELAR => 'Cancelar',
     ];
 
-    /** Lo único que el auditor hace en el ciclo de vida (además de crear): activar. El resto es del administrador. */
+
     public const ACCIONES_AUDITOR = [self::ACTIVAR];
 
     public function __construct(private readonly BitacoraService $bitacora) { }
@@ -99,9 +91,6 @@ class MudanzaService {
     }
 
     /**
-     * Deja la mudanza con exactamente esos movimientos. Los almacenes se crean
-     * por código si no existen. Un movimiento que ya tiene tarimas o embarques
-     * no se puede quitar (perdería su trazabilidad).
      *
      * @param list<array{origen: string, destino: string}> $movimientos
      */
@@ -204,7 +193,7 @@ class MudanzaService {
         $mudanza->refresh();
     }
 
-    /** Reglas de negocio de cada transición, además del estado de origen. */
+
     private function validar(Mudanza $mudanza, string $accion): void {
         if ($accion === self::ACTIVAR) {
             $faltan = array_filter([

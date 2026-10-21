@@ -22,11 +22,6 @@ class EscaneoController extends Controller {
         private readonly SkuActivo $skuActivo,
     ) { }
 
-    /**
-     * Opciones del selector de SKU: las del inventario del almacén de origen de
-     * la tarima elegida, filtradas por lo escrito. Pocas a la vez (nunca el
-     * inventario completo).
-     */
     public function skus(Request $request, InventarioService $inventario): JsonResponse {
         $datos = $request->validate([
             'tarima' => ['required', 'uuid'],
@@ -77,11 +72,7 @@ class EscaneoController extends Controller {
         return redirect()->route('wms')->with('warn', $registro ? "SKU {$registro->sku} cerrado." : null);
     }
 
-    /**
-     * N/S escaneada o escrita a mano. Responde JSON al handheld (escaneo
-     * continuo) y redirige cuando el formulario se envía sin JavaScript. Una N/S
-     * que no está en el inventario se registra con su incidencia sin preguntar.
-     */
+
     public function agregarNumeroSerie(AgregarNumeroSerieRequest $request): RedirectResponse|JsonResponse {
         $padre = $this->skuActivo->obtener();
         if (! $padre) {
@@ -115,7 +106,6 @@ class EscaneoController extends Controller {
                 'tarima' => $padre->tarima->uuid,
                 'total_registro' => $total,
                 'piezas_tarima' => $padre->tarima->fresh()->piezas(),
-                // Piezas del embarque sin etiqueta impresa (una etiqueta por pieza).
                 'etiquetas_pendientes' => NumeroSerie::whereHas('registro', fn ($q) => $q->where('tarima_id', $padre->tarima_id))->whereNull('etiqueta_impresa_at')->count(),
             ]);
         }
@@ -123,10 +113,7 @@ class EscaneoController extends Controller {
         return redirect()->route('wms')->with($r['estado'] === EscaneoService::REPETIDA || $r['incidencia'] ? 'warn' : 'ok', $mensaje);
     }
 
-    /**
-     * "Editar números de serie" → Agregar: una N/S a ese modelo del embarque,
-     * con las mismas validaciones que el escaneo.
-     */
+
     public function agregarAlModelo(Request $request, Tarima $tarima, Registro $registro): RedirectResponse {
         $ns = $request->validate(['nueva_ns' => ['required', 'string', 'max:150']], ['nueva_ns.*' => 'Escanea o escribe la N/S que quieres agregar.'])['nueva_ns'];
 
@@ -140,7 +127,7 @@ class EscaneoController extends Controller {
         return redirect()->route('wms')->with($r['estado'] === EscaneoService::REPETIDA || $r['incidencia'] ? 'warn' : 'ok', $mensaje)->with('panel', $registro->id);
     }
 
-    /** "Editar números de serie" → Editar: corrige el número de serie, el SKU o ambos. */
+
     public function editarNumeroSerie(Request $request, Tarima $tarima, NumeroSerie $numeroSerie): RedirectResponse {
         $datos = $request->validate([
             'nuevo_sku' => ['required', 'string', 'max:100'],
@@ -155,10 +142,7 @@ class EscaneoController extends Controller {
         return redirect()->route('wms')->with($r['incidencia'] ? 'warn' : 'ok', $mensaje)->with('panel', $serie->registro_id);
     }
 
-    /**
-     * Los errores de las acciones del panel se muestran dentro del panel (campo
-     * "anomalia"), no en el campo de escaneo principal.
-     */
+
     private function enPanel(callable $accion): mixed {
         try {
             return $accion();
@@ -167,11 +151,7 @@ class EscaneoController extends Controller {
         }
     }
 
-    /**
-     * Marcar o quitar daño/anomalía en N/S de la tarima, antes de guardarla, o
-     * eliminar las N/S elegidas en las casillas (solo sin etiquetas impresas).
-     * Al guardar la tarima, cada N/S marcada abre su incidencia de producto dañado.
-     */
+
     public function anomalias(Request $request, Tarima $tarima): RedirectResponse|JsonResponse {
         $datos = $request->validate([
             'accion' => ['required', 'in:marcar,quitar,eliminar'],

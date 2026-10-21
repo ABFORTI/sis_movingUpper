@@ -9,18 +9,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-/**
- * Una pieza ya guardada: una fila del Excel. Su consecutivo es fijo para
- * siempre; si la pieza cambia de tarima o se retira, queda en movimientos.
- */
+
 class Partida extends Model {
     public const EN_TARIMA = 'en_tarima';
     public const RETIRADA = 'retirada';
-
-    /**
-     * Con N/S · SKU suelto · SKU padre sin N/S capturadas. Las dos últimas solo
-     * existen en registros históricos: hoy toda pieza se registra con SKU + N/S.
-     */
     public const TIPO_NS = 'ns';
     public const TIPO_SKU = 'sku';
     public const TIPO_SIN_NS = 'sin_ns';
@@ -76,7 +68,7 @@ class Partida extends Model {
         return $this->belongsToMany(Incidencia::class, 'incidencia_partida');
     }
 
-    /** Incidencia abierta de "no encontrado en inventario" de su N/S: pieza pendiente de revisión. */
+
     public function incidenciaPendiente(): HasOne {
         return $this->hasOne(Incidencia::class, 'numero_serie_id', 'numero_serie_id')->pendientesDeRevision();
     }
@@ -85,7 +77,7 @@ class Partida extends Model {
         return $this->numero_serie_id !== null && $this->incidenciaPendiente !== null;
     }
 
-    /** Su lugar en un embarque, si ya se cargó. */
+
     public function carga(): HasOne {
         return $this->hasOne(EmbarquePartida::class);
     }
@@ -94,7 +86,7 @@ class Partida extends Model {
         return $query->where('estado', self::EN_TARIMA);
     }
 
-    /** Piezas con una incidencia vigente que bloquea su traslado: no se pueden cargar. */
+
     public function scopeBloqueadas(Builder $query): Builder {
         return $query->whereHas('incidencias', fn (Builder $q) => $q->vigentes()->where('bloquea_traslado', true));
     }
@@ -103,7 +95,7 @@ class Partida extends Model {
         return $this->estado === self::RETIRADA;
     }
 
-    /** Lo que se muestra en la columna N/S: la serie, "—" para SKU suelto o "(sin N/S)". */
+
     public function getNsMostradaAttribute(): string {
         return match ($this->tipo_identificacion) {
             self::TIPO_SKU => '—',

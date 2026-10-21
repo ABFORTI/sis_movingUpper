@@ -6,10 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
-/**
- * Historial de una partida: alta, cambio de tarima, retiro o corrección de su
- * N/S desde el Historial (agregada, editada, eliminada). Solo se inserta.
- */
+
 class MovimientoPartida extends Model {
     public const UPDATED_AT = null;
 

@@ -13,10 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/**
- * Reporte Diario (antes "Entregas de inventario"): se consulta y se exporta por
- * día. El mismo día elegido filtra lo que se muestra y lo que entra al Excel.
- */
+
 class EntregaController extends Controller {
     private const FECHA = ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'];
 
@@ -36,7 +33,6 @@ class EntregaController extends Controller {
             'mudanza' => $mudanza,
             'mudanzas' => Mudanza::whereNot('estado', Mudanza::BORRADOR)->orderByDesc('id')->get(),
             'fecha' => $dia,
-            // Reportes de ese día; las entregas anteriores (mudanza completa, sin fecha) aparecen el día en que se generaron.
             'entregas' => Entrega::with('generadaPor')->where('mudanza_id', $mudanza?->id ?? 0)
                 ->where(fn ($q) => $q->whereDate('fecha', $dia->format('Y-m-d'))
                     ->orWhere(fn ($h) => $h->whereNull('fecha')->whereBetween('created_at', [$dia, $finDia])))

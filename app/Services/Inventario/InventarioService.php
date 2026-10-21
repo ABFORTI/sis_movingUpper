@@ -14,20 +14,13 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Consultas al inventario vigente de un almacén. Todas filtran por la carga
- * vigente de ESE almacén y usan las columnas normalizadas indexadas: nunca se
- * carga el inventario completo en memoria.
- */
+
 class InventarioService {
     public function vigente(?Almacen $almacen): ?InventarioCarga {
         return $almacen ? InventarioCarga::where('almacen_id', $almacen->id)->where('vigente', true)->first() : null;
     }
 
     /**
-     * SKU del inventario que empiezan con el texto, o cuyo modelo o descripción
-     * lo contienen. Uno por SKU, con su descripción y cuántas piezas tiene. Se
-     * suman los SKU dados de alta a mano en el almacén (alta: true, 0 piezas).
      *
      * @return Collection<int, array{sku: string, modelo: ?string, descripcion: ?string, piezas: int, alta: bool}>
      */
@@ -56,7 +49,7 @@ class InventarioService {
                 'alta' => false,
             ]);
 
-        // Si después llega en un inventario de Excel, manda el renglón del inventario.
+
         $deAlta = SkuAlta::where('almacen_id', $carga->almacen_id)
             ->when($texto !== '', fn (Builder $q) => $q->where(fn (Builder $q) => $q
                 ->where('sku_norm', 'like', $like.'%')
@@ -70,12 +63,7 @@ class InventarioService {
             ->values();
     }
 
-    /**
-     * El SKU tal como está en el inventario, con su descripción; si no está en
-     * esa carga, el dado de alta a mano en su almacén (alta: true); null si no
-     * existe en ninguno. Un SKU del catálogo de conversiones se busca primero
-     * tal cual y luego con sus equivalentes (ConversionSku).
-     */
+
     public function sku(InventarioCarga $carga, string $sku): ?array {
         foreach (ConversionSku::equivalentes($sku) as $norm) {
             $item = InventarioItem::where('inventario_carga_id', $carga->id)
@@ -95,13 +83,7 @@ class InventarioService {
         return null;
     }
 
-    /**
-     * Da de alta un SKU en el almacén solo con su código (y una descripción
-     * opcional), para escanearlo aunque todavía no venga en su inventario de
-     * Excel. No crea renglones de inventario, N/S, piezas ni escaneos. Se
-     * rechaza si ya está en el inventario vigente del almacén o ya se dio de
-     * alta ahí (sin distinguir mayúsculas ni espacios).
-     */
+
     public function darDeAltaSku(Almacen $almacen, string $sku, ?string $descripcion, User $usuario): SkuAlta {
         $sku = NumeroSerieNormalizado::limpio($sku);
         $norm = NumeroSerieNormalizado::de($sku);
@@ -137,10 +119,7 @@ class InventarioService {
     }
 
     /**
-     * Renglones del SKU cuyo número de serie del fabricante, número de serie o
-     * número de serie de lote coincide con lo capturado. Cada renglón trae en
-     * `campo` el primero de los tres que coincidió. Un SKU convertido coincide
-     * también con los renglones de su SKU original (y al revés).
+     * Renglones del SKU cuyo número de serie del fabricante, número de serie o número de serie de lote coincide con lo capturado
      *
      * @return Collection<int, InventarioItem>
      */
@@ -168,10 +147,7 @@ class InventarioService {
             });
     }
 
-    /**
-     * Por qué no hubo coincidencia, para orientar al operador: la serie existe
-     * con otro SKU de este almacén, o solo en el inventario de otro almacén.
-     */
+
     public function pista(InventarioCarga $carga, string $sku, string $numeroSerie): ?string {
         $ns = NumeroSerieNormalizado::de($numeroSerie);
         $porSerie = fn (Builder $q) => $q->where('ns_fabricante_norm', $ns)->orWhere('numero_serie_norm', $ns)->orWhere('ns_lote_norm', $ns);

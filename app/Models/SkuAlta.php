@@ -5,12 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * SKU dado de alta a mano en un almacén, sin números de serie: existe para el
- * escaneo aunque aún no venga en el inventario de Excel. No es un renglón del
- * inventario: sus N/S, al escanearse, no tienen con qué coincidir y quedan
- * pendientes de revisión como cualquier N/S fuera del inventario.
- */
+
 class SkuAlta extends Model {
     protected $table = 'skus_alta';
 

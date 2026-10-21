@@ -9,15 +9,7 @@ use App\Models\User;
 use App\Services\Etiquetas\EtiquetaService;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Registra cada impresión confirmada. Vive fuera de TarimaService porque
- * EtiquetaService depende del inventario y TarimaService no debe depender de él.
- *
- * Cada pieza tiene su etiqueta: se marcan como impresas las piezas que salieron
- * en esta impresión. Cuando ya no queda ninguna pieza del embarque sin
- * etiqueta, el embarque queda "impreso" (requisito para guardarlo) y se quita
- * la reimpresión pendiente que dejó una corrección.
- */
+
 class ImpresionService {
     public function __construct(
         private readonly TarimaService $tarimas,
@@ -25,15 +17,13 @@ class ImpresionService {
     ) { }
 
     /**
-     * @param  list<int>|null  $ids  piezas que se imprimieron (null: todas las del embarque)
-     * @return int piezas del embarque que siguen sin etiqueta
+     * @param  list<int>|null  $ids  piezas que se imprimieron
+     * @return int 
      */
     public function registrar(Tarima $tarima, User $usuario, ?array $ids = null): int {
         $this->tarimas->asegurarImprimible($tarima);
 
         $pendientes = DB::transaction(function () use ($tarima, $usuario, $ids) {
-            // El FOR UPDATE serializa dos confirmaciones simultáneas (doble clic)
-            // para que solo la primera quede como impresión original.
             Tarima::whereKey($tarima->id)->lockForUpdate()->first();
 
             $piezas = $this->etiquetas->piezas($tarima, $ids);
@@ -50,7 +40,6 @@ class ImpresionService {
             $pendientes = $this->etiquetas->pendientes($tarima)->count();
             if ($pendientes === 0) {
                 Tarima::whereKey($tarima->id)->whereNull('guardada_at')->whereNull('impresa_at')->update(['impresa_at' => now()]);
-                // Tras una corrección, las etiquetas nuevas ya coinciden con el contenido.
                 Tarima::whereKey($tarima->id)->update(['reimpresion_pendiente_at' => null]);
             }
 

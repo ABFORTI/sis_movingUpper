@@ -2,20 +2,6 @@
 
 namespace App\Services\Etiquetas;
 
-/**
- * Etiqueta de prueba para verificar la impresora sin tocar ninguna tarima.
- *
- * Dibuja un marco en el borde exacto del área imprimible, marcas "ARRIBA" y
- * "ABAJO", una regla cada 5 mm, un código de barras y un QR. Al verla impresa:
- * - Los cuatro bordes completos y "ARRIBA" pegado al borde superior: el papel
- *   está bien calibrado.
- * - Falta el borde inferior o "ARRIBA" sale bajo: la impresora no reconoce el
- *   inicio de la etiqueta (calibrar) o hay un ^LT viejo (lo corrige el ZPL).
- * - Sale cortada en dos etiquetas: el largo del papel no coincide (calibrar).
- *
- * Usa el mismo Lienzo que las etiquetas reales: la vista previa en pantalla y
- * lo que se imprime salen del mismo diseño.
- */
 class EtiquetaPrueba {
     private const BORDE = 4;
 
@@ -32,13 +18,13 @@ class EtiquetaPrueba {
         $ancho = $f->anchoImprimible;
         $mm = fn (float $v) => $f->dots($v);
 
-        // Marco en el borde del área imprimible.
+
         $l->linea(0, self::BORDE, $x0, $ancho);
         $l->linea($f->alto - self::BORDE, self::BORDE, $x0, $ancho);
         $l->linea(0, $f->alto, $x0, self::BORDE);
         $l->linea(0, $f->alto, $x0 + $ancho - self::BORDE, self::BORDE);
 
-        // Regla en el borde izquierdo: marca cada 5 mm, larga cada 10 mm.
+
         for ($v = 5; $v * $f->dotsPorMm() < $f->alto - self::BORDE; $v += 5) {
             $y = $mm($v);
             $largo = $v % 10 === 0 ? $mm(4) : $mm(2);
@@ -74,11 +60,7 @@ class EtiquetaPrueba {
         return $this->svg->render($this->lienzo(), 'Etiqueta de prueba');
     }
 
-    /**
-     * Ajustes para la ZQ620 que se guardan en la impresora (^JUS) y calibración
-     * del sensor de papel (~JC, avanza 1 o 2 etiquetas). Solo se envía cuando el
-     * operador lo pide, desde la página de prueba.
-     */
+
     public function configuracion(): string {
         $f = $this->formato;
         $media = ['gap' => 'Y', 'marca' => 'M', 'continuo' => 'N'][$f->media] ?? 'Y';

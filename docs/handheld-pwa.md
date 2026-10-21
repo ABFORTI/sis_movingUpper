@@ -1,11 +1,3 @@
-# Handheld: app instalable (PWA) o APK
-
-**Conclusión: no hace falta una APK.** Con el service worker y el manifiesto, la aplicación se instala en el handheld como un acceso directo que abre a pantalla completa, sin barra del navegador. Escáner e impresora funcionan igual que en Chrome, porque la PWA instalada **es** Chrome. Una APK solo se justifica en los casos de la §4.
-
-> Convención: **[VERIFICADO]** comprobado en este repositorio o en la documentación citada. **[VERIFICAR EN EQUIPO]** depende del modelo de handheld y de su versión de Android/DataWedge; hay que probarlo en el equipo real antes de desplegar.
-
----
-
 ## 1. Cómo se instala
 
 Requisitos (los cumple Hostinger con HTTPS):
@@ -46,7 +38,7 @@ Configuración en DataWedge (Zebra):
 
 En Android 10 o posterior, el teclado desaparece un instante en cada lectura: es el método de entrada propio de DataWedge, y es normal.
 
-**El gatillo funciona como Enter aunque DataWedge no mande Enter** (`public/js/escaneo.js`, sección 5). Si la lectura llega en ráfaga (menos de 40 ms entre caracteres, o toda de golpe) y luego hay silencio, el campo se envía solo; un sufijo **Tab** también cuenta como Enter. Si DataWedge sí manda Enter, se usa ese y no se duplica. Aplica a los campos de N/S, andén y al de SKU del WMS. Escribir a mano nunca se envía solo: es lento, y con el teclado en pantalla (⌨ activado, o el buscador de SKU) solo cuenta la ráfaga tecla por tecla, no el texto predictivo ni las sugerencias. Activar ⌨ ya no desactiva el envío automático del gatillo. En el SKU, el Enter del escáner envía lo leído aunque la lista de opciones esté abierta; Enter elige de la lista solo si se navegó con las flechas. Aun así, lo más limpio es activar **Send ENTER key** en el perfil de DataWedge: el envío es inmediato, sin la espera de 0.12 s.
+**El gatillo funciona como Enter aunque DataWedge no mande Enter** (`public/js/escaneo.js`, sección 5). Si la lectura llega en ráfaga (menos de 40 ms entre caracteres, o toda de golpe) y luego hay silencio, el campo se envía solo; un sufijo **Tab** también cuenta como Enter. Si DataWedge sí manda Enter, se usa ese y no se duplica: tras un envío automático solo se descarta el Enter que llega con el campo vacío o con la misma lectura; el Enter de una lectura nueva siempre se respeta. Un tropiezo de más de 40 ms (sin llegar a 0.12 s) dentro de una lectura ya reconocida no la corta. Aplica a los campos de N/S, andén y al de SKU del WMS. Escribir a mano nunca se envía solo: es lento, y con el teclado en pantalla (⌨ activado, o el buscador de SKU) solo cuenta la ráfaga tecla por tecla, no el texto predictivo ni las sugerencias. Activar ⌨ ya no desactiva el envío automático del gatillo. En el SKU, el Enter del escáner envía lo leído aunque la lista de opciones esté abierta; Enter elige de la lista solo si se navegó con las flechas. Aun así, lo más limpio es activar **Send ENTER key** en el perfil de DataWedge: el envío es inmediato, sin la espera de 0.12 s.
 
 ### Mejoras hechas para el escáner
 
@@ -71,48 +63,3 @@ No se puede desde la web (requiere APK): leer la simbología del código, contro
 
 **Bluetooth Classic (SPP), el que usa el emparejamiento normal de Android, no está disponible para ninguna página web**, esté instalada o no. Por eso existen Browser Print y Web Bluetooth. Una APK con el SDK Link-OS de Zebra sí lo usaría, e imprimiría sin selector y sin la app de Browser Print.
 
----
-
-## 4. Cuándo sí convendría una APK
-
-| Necesidad | PWA | APK |
-|---|:-:|:-:|
-| Instalar con ícono y abrir a pantalla completa | ✔ | ✔ |
-| Escanear con el gatillo (teclado + Enter) | ✔ | ✔ |
-| Imprimir en Zebra por Bluetooth | ✔ (Browser Print o BLE) | ✔ (SDK, sin apps extra) |
-| Actualizaciones sin reinstalar | ✔ (al publicar en Hostinger) | ✘ (distribuir cada versión) |
-| Capturar **sin conexión** y sincronizar después | ✘ (decisión de diseño, §1) | Posible, con manejo de conflictos de N/S |
-| Recibir lecturas por Intent, simbología, control del gatillo | ✘ | ✔ |
-| Imprimir por Bluetooth Classic sin Browser Print | ✘ | ✔ |
-| Modo kiosco (bloquear el equipo a una sola app) | Parcial (lo hace el MDM con Chrome) | ✔ |
-| iPhone / iPad | ✘ para imprimir | Otra app iOS aparte |
-
-**Punto intermedio:** si TI exige distribuir "una APK" por MDM, una **TWA** (*Trusted Web Activity*, generada con Bubblewrap) empaqueta esta misma PWA como APK sin reescribir nada. Tiene exactamente las mismas capacidades de la PWA.
-
-**Recomendación:** PWA + DataWedge en modo teclado + Zebra Browser Print. Se reconsidera una APK solo si la operación necesita capturar sin internet en el almacén.
-
----
-
-## 5. Pruebas en el equipo real
-
-| # | Prueba | Esperado |
-|---|---|---|
-| 1 | Chrome → ⋮ → Instalar app | Ícono MovingUpper en el escritorio; abre sin barra del navegador |
-| 2 | Escanear SKU padre con el gatillo | Se activa sin abrir el teclado en pantalla |
-| 3 | Escanear 10 N/S seguidas, rápido | Las 10 en la tarjeta de la tarima; contador en 10; sin recargas |
-| 4 | Escanear una N/S repetida | Tono grave + vibración; mensaje rojo junto al campo con la tarima donde ya está |
-| 5 | Tocar ⌨ y escribir una N/S a mano | Aparece el teclado; Enter la agrega |
-| 6 | Apagar el wifi y escanear | Mensaje "Sin conexión: la N/S … NO se guardó" |
-| 7 | Abrir la app sin wifi | Pantalla "Sin conexión" con "Reintentar" |
-| 8 | Imprimir etiqueta desde la app instalada (Browser Print) | Imprime sin selector |
-| 9 | Imprimir sin Browser Print (Web Bluetooth) | Selector la primera vez; anotar si lo vuelve a pedir en la siguiente etiqueta |
-| 10 | Anular una tarima vacía | Diálogo con campo de motivo, legible en la pantalla del handheld |
-
-## Fuentes
-
-- [DataWedge — Getting Started (perfiles y asociación de apps)](https://techdocs.zebra.com/datawedge/14-3/guide/gettingstarted)
-- [DataWedge — Keystroke Output](https://techdocs.zebra.com/datawedge/11-4/guide/output/keystroke)
-- [Web Bluetooth — estado de implementación](https://github.com/WebBluetoothCG/web-bluetooth/blob/158ebcbda139497849a41d826d5191fa4d9e61e7/implementation-status.md)
-- [Web Bluetooth — permisos persistentes en Chrome](https://lists.w3.org/Archives/Public/public-web-bluetooth/2020Jul/0000.html)
-- [Chrome — `getDevices()` y `forget()`](https://chromestatus.com/release-notes/159)
-- `docs/impresion-zebra-zq620.md` (Browser Print, Web Bluetooth y restricciones de la ZQ620)

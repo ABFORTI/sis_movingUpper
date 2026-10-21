@@ -1,9 +1,5 @@
 @props(['incidencia' => null, 'compacto' => false])
-{{--
-  Señal de N/S registrada sin coincidencia en el inventario (incidencia abierta
-  de "no encontrado en inventario"). Icono + texto: no depende solo del color.
-  Desaparece sola cuando la incidencia se resuelve.
---}}
+
 @php
   $titulo = 'Pendiente de revisión: no se encontró en el inventario'.($incidencia ? " · {$incidencia->folio}" : '');
 @endphp

@@ -65,17 +65,26 @@
           <div class="field">
             <label for="placas" class="label">Placas del tractor</label>
             <input id="placas" name="placas" value="{{ old('placas') }}" required minlength="3" maxlength="20" autocapitalize="characters"
+                   autocomplete="off" @if (! empty($sugerencias['placas'])) list="sug-placas" @endif
                    @class(['input', 'input-mono', 'is-invalid' => $errors->has('placas')])>
+            @include('embarques.partials.sugerencias', ['id' => 'sug-placas', 'valores' => $sugerencias['placas'] ?? []])
             @error('placas') <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
           </div>
           <div class="field">
             <label for="remolque" class="label">Remolque / caja <span class="optional">opcional</span></label>
-            <input id="remolque" name="remolque" value="{{ old('remolque') }}" maxlength="30" class="input input-mono" autocapitalize="characters">
+            <input id="remolque" name="remolque" value="{{ old('remolque') }}" maxlength="30" class="input input-mono" autocapitalize="characters"
+                   autocomplete="off" @if (! empty($sugerencias['remolque'])) list="sug-remolque" @endif>
+            @include('embarques.partials.sugerencias', ['id' => 'sug-remolque', 'valores' => $sugerencias['remolque'] ?? []])
           </div>
           <div class="field">
             <label for="chofer" class="label">Chofer <span class="optional">opcional</span></label>
-            <input id="chofer" name="chofer" value="{{ old('chofer') }}" maxlength="150" class="input">
+            <input id="chofer" name="chofer" value="{{ old('chofer') }}" maxlength="150" class="input"
+                   autocomplete="off" @if (! empty($sugerencias['chofer'])) list="sug-chofer" @endif>
+            @include('embarques.partials.sugerencias', ['id' => 'sug-chofer', 'valores' => $sugerencias['chofer'] ?? []])
           </div>
+          @if (array_filter($sugerencias))
+            <p class="hint">Al escribir se sugieren placas, cajas y choferes ya registrados; también puedes escribir uno nuevo.</p>
+          @endif
           <button type="submit" class="btn btn-primary btn-block" style="margin-top:12px;">
             <span class="spinner" aria-hidden="true"></span><x-icon name="truck" class="btn-icon" /> Crear y empezar a cargar
           </button>

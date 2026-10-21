@@ -9,11 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use LogicException;
 
-/**
- * Histórico. Las autorizaciones de traslado se retiraron de la operación
- * (2026-10-12): la carga ya no las exige y no se registran nuevas. El modelo
- * queda para consultar y proteger los registros y evidencias que ya existían.
- */
+
 class Autorizacion extends Model {
     public const PENDIENTE = 'pendiente';
     public const VIGENTE = 'vigente';
@@ -57,7 +53,7 @@ class Autorizacion extends Model {
         ];
     }
 
-    /** Lo que dice el documento y su alcance no cambian; solo avanza el estado. */
+
     private const INMUTABLES = ['mudanza_id', 'folio', 'documento', 'fecha_documento', 'autorizado_por', 'autorizado_cargo', 'total_partidas', 'hash_alcance', 'registrada_by'];
 
     protected static function booted(): void {
@@ -73,7 +69,7 @@ class Autorizacion extends Model {
         return $this->belongsTo(Mudanza::class);
     }
 
-    /** El alcance, con la copia de cada pieza tal como se autorizó. */
+
     public function partidas(): BelongsToMany {
         return $this->belongsToMany(Partida::class, 'autorizacion_partidas')
             ->withPivot(['consecutivo', 'sku', 'numero_serie', 'tarima_numero'])
@@ -113,8 +109,7 @@ class Autorizacion extends Model {
     }
 
     /**
-     * SHA-256 del alcance: lista ordenada "partida|consecutivo|N/S". Se guarda al
-     * registrar y se vuelve a calcular al validar para demostrar que no cambió.
+     * SHA-256 del alcance: lista ordenada 
      *
      * @param iterable<array{partida_id: int, consecutivo: int, numero_serie: ?string}> $lineas
      */

@@ -895,6 +895,11 @@ select.input {
   .page-head { flex-wrap: nowrap; }
   .page-head > form { flex: 0 0 auto; }
   .page-head > form .btn { flex: 0 0 auto; height: var(--h-sm); padding: 0 12px; font-size: 13px; }
+  /* Encabezado con varios controles (Excel del Historial): no caben junto al
+     título; bajan a su propia fila en vez de ensanchar la página. */
+  .page-head:has(> form.btn-group) { flex-wrap: wrap; }
+  .page-head > form.btn-group { flex: 1 1 100%; flex-wrap: nowrap; }
+  .page-head > form.btn-group > .input { flex: 1 1 0; min-width: 0; }
   .page-title { font-size: 20px; }
 
   .stats { gap: 6px; margin-bottom: 12px; }
@@ -911,8 +916,9 @@ select.input {
   .card-captura .card-body:has(.active-sku) > .segmented { order: 0; }
   .card-captura .card-body:has(.active-sku) > form[data-escaneo-ns] { order: 1; margin-top: 14px; }
   .card-captura .card-body:has(.active-sku) > .active-sku { order: 2; }
-  /* Sin SKU padre activo, el campo de N/S deshabilitado solo estorba. */
-  .card-captura .card-body:not(:has(.active-sku)) > form[data-escaneo-ns] { display: none; }
+  /* Sin SKU padre activo, el campo de N/S deshabilitado solo estorba; las Fotos
+     del N/S se quedan, porque también leen el SKU de la etiqueta. */
+  .card-captura .card-body:not(:has(.active-sku)) > form[data-escaneo-ns] > :not(.captura-opciones):not([data-foto-estado]) { display: none; }
 
   /* "Vaciar" con borde para que no se vea suelto junto a los demás botones. */
   .pallet-foot .btn-ghost { border-color: var(--border-strong); }
@@ -980,6 +986,10 @@ select.input {
 }
 @media (max-width: 760px) {
   body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+  /* Si algo de una página se pasa de ancho, Chrome ensancha la página y la
+     pestaña "Más" queda fuera de la pantalla. Se recorta el contenido, no el
+     body (su overflow pasa a la ventana y no recorta); clip no crea scroll. */
+  body > :not(.topbar):not(dialog) { overflow-x: clip; }
   .nav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; gap: 0;
     height: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
@@ -999,7 +1009,7 @@ select.input {
 
   .nav-solo-escritorio { display: none; }
   .nav-mas-solo-movil { display: block; }
-  .nav-mas-link.nav-solo-movil { display: flex; }
+  .nav-mas-link.nav-solo-movil, .nav > .nav-link.nav-solo-movil { display: flex; }
   .nav-contador.nav-solo-movil { display: inline-grid; }
 
   /* "Más" se abre como hoja sobre las pestañas, con el usuario arriba. */
@@ -1178,7 +1188,8 @@ details.card[open] > .summary-card { padding-bottom: 0; }
 .active-sku-desc { font-size: 13px; color: var(--text-2); margin: -4px 0 10px; padding-right: 64px; overflow-wrap: anywhere; }
 
 /* Captura manual / fotografía (pendiente) */
-.captura-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+/* auto-fit: una sola opción ocupa todo el ancho; varias se acomodan solas. */
+.captura-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 12px; }
 .captura-opcion {
   display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; text-align: left;
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-md); color: var(--text);
@@ -1191,7 +1202,15 @@ details.card[open] > .summary-card { padding-bottom: 0; }
 .captura-opcion.is-pendiente { border-style: dashed; background: var(--surface-2); opacity: 1; color: var(--text-3); }
 .captura-opcion[aria-busy="true"] { cursor: progress; opacity: .8; }
 [data-foto-estado] { margin: 10px 0 0; }
-@media (max-width: 380px) { .captura-opciones { grid-template-columns: 1fr; } }
+/* Fotos del N/S: se distingue a simple vista como acción, no como texto. */
+.captura-opcion-foto { border-color: var(--brand); background: var(--brand-50); cursor: pointer; }
+.captura-opcion-foto .tile { flex: 0 0 auto; width: 36px; height: 36px; }
+.captura-opcion-foto b { color: var(--brand); }
+@media (pointer: coarse) {
+  .captura-opcion-foto { min-height: 60px; }
+  .captura-opcion-foto b { font-size: 15px; }
+  .captura-opcion-foto small { font-size: 12.5px; }
+}
 
 /* Estado del último escaneo: aviso (no es error ni éxito pleno) */
 .scan-estado[data-tipo="aviso"] { background: var(--warn-50); border-color: var(--warn-200); color: var(--warn-text); }

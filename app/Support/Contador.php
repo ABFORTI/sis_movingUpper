@@ -5,14 +5,8 @@ namespace App\Support;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
-/**
- * Secuencias en la tabla `contadores`. Debe usarse dentro de una transacción:
- * el FOR UPDATE sobre la fila hace que las solicitudes simultáneas esperen su
- * turno y reciban números distintos y contiguos. Un número entregado nunca se
- * vuelve a entregar, aunque la operación que lo pidió se anule después.
- */
+
 class Contador {
-    /** Reserva $cantidad números y devuelve el primero. */
     public static function reservar(string $clave, int $cantidad = 1): int {
         if (DB::transactionLevel() === 0) {
             throw new LogicException("El contador {$clave} solo se puede usar dentro de una transacción.");
@@ -34,9 +28,6 @@ class Contador {
     }
 
     /**
-     * Devuelve $numero a la secuencia solo si es el último que se entregó: el
-     * siguiente reservar() lo vuelve a dar. Cualquier otro número no se toca
-     * (queda el hueco), así nunca se reasigna un número anterior ni se duplica.
      *
      * @return bool true si el número se podrá reutilizar
      */

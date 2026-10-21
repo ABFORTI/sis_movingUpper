@@ -16,32 +16,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Carga (subir al tráiler) y recepción (bajar en el destino).
- *
- * En pantalla este modelo es el "tráiler" (un viaje: placas, sello, salida y
- * recepción); el "embarque" que ve el usuario es la agrupación de piezas
- * (modelo Tarima) que va en la caja del tráiler. Cada pieza tiene una sola
- * fila en `embarque_partidas` con su carga y su recepción, así que no hay dos
- * registros para la misma operación.
- *
- * - En el andén se escanea la etiqueta de cada pieza (código de barras = su
- *   N/S), el número de embarque ("E-004", carga todas sus piezas) o un SKU que
- *   esté en un solo embarque. Las etiquetas viejas de tarima (QR, "TAR-…",
- *   "T-004") se siguen reconociendo. Se rechaza lo que no se puede identificar
- *   sin ambigüedad: embarque anulado, en captura, con etiquetas por
- *   reimprimir, pieza ya cargada en otro tráiler o con una incidencia que
- *   bloquea su traslado. No se pide autorización.
- * - Volver a escanear lo que ya se cargó (o recibió) en este embarque no es un
- *   error: se informa como repetido y no cambia nada (idempotente). Así un
- *   reintento por mala señal no duplica ni asusta al operador.
- * - En el destino, lo que no viene en el embarque no se asocia a nada: se avisa
- *   y queda en la bitácora. Lo cargado y no recibido queda como "Faltante en
- *   recepción" en el manifiesto y el reporte final (ya no abre incidencias:
- *   solo existen las de "no encontrado en inventario" y "producto dañado").
- * - Si el tráiler es de un movimiento (almacén origen → destino), solo se
- *   cargan embarques de ese movimiento.
- */
+
 class EmbarqueService {
     public const OK = 'ok';
     public const REPETIDO = 'repetido';
@@ -53,9 +28,38 @@ class EmbarqueService {
         return "embarques_mudanza_{$mudanza->id}";
     }
 
+    /** Placas y remolque se comparan y guardan así: «abc 123 » y «ABC  123» son el mismo. */
+    private static function clave(string $valor): string {
+        return mb_strtoupper(preg_replace('/\s+/u', ' ', trim($valor)));
+    }
+
     /**
-     * Si la mudanza tiene un solo movimiento, el embarque es de ese; si tiene
-     * varios, hay que indicar cuál (cada tráiler va de un almacén a otro).
+     * Valores ya registrados en tráileres anteriores (de cualquier mudanza), los
+     * más recientes primero y sin repetidos, para sugerirlos al escribir.
+     *
+     * @param list<'placas'|'remolque'|'chofer'> $campos
+     * @return array<string, list<string>>
+     */
+    public function sugerencias(array $campos = ['placas', 'remolque', 'chofer'], int $limite = 200): array {
+        return collect($campos)->mapWithKeys(fn (string $campo) => [
+            $campo => Embarque::query()->whereNotNull($campo)->where($campo, '!=', '')
+                ->groupBy($campo)->orderByRaw('MAX(id) DESC')->limit($limite * 2)->pluck($campo)
+                ->unique(fn (string $v) => self::clave($v))->take($limite)->values()->all(),
+        ])->all();
+    }
+
+    /** El chofer se escribe a mano: si ya está registrado con otras mayúsculas o espacios, se usa el registrado. */
+    private function choferRegistrado(?string $chofer): ?string {
+        if ($chofer === null || trim($chofer) === '') {
+            return null;
+        }
+        $chofer = preg_replace('/\s+/u', ' ', trim($chofer));
+
+        return Embarque::query()->whereNotNull('chofer')->distinct()->pluck('chofer')
+            ->first(fn (string $v) => self::clave($v) === self::clave($chofer)) ?? $chofer;
+    }
+
+    /**
      *
      * @param array{placas: string, remolque?: ?string, chofer?: ?string, notas?: ?string, movimiento?: ?int} $datos
      */
@@ -78,9 +82,9 @@ class EmbarqueService {
                 'mudanza_id' => $mudanza->id,
                 'mudanza_movimiento_id' => $movimiento?->id,
                 'folio' => sprintf('TRL-%04d', Contador::siguiente(self::claveFolio($mudanza))),
-                'placas' => mb_strtoupper(trim($datos['placas'])),
-                'remolque' => $datos['remolque'] ?? null,
-                'chofer' => $datos['chofer'] ?? null,
+                'placas' => self::clave($datos['placas']),
+                'remolque' => isset($datos['remolque']) ? self::clave($datos['remolque']) : null,
+                'chofer' => $this->choferRegistrado($datos['chofer'] ?? null),
                 'notas' => $datos['notas'] ?? null,
                 'estado' => Embarque::EN_CARGA,
                 'creado_by' => $usuario->id,
@@ -100,7 +104,6 @@ class EmbarqueService {
         try {
             return DB::transaction(fn () => $this->cargarEnTransaccion($embarque, $codigo, $usuario));
         } catch (UniqueConstraintViolationException) {
-            // Otro operador cargó la misma pieza en otro embarque al mismo tiempo.
             throw $this->rechazo('Ese embarque o pieza se acaba de cargar en otro tráiler. Revisa la lista.');
         }
     }
@@ -160,7 +163,7 @@ class EmbarqueService {
         return $this->resultado(self::OK, "{$objetivo['nombre']}: {$n} ".($n === 1 ? 'pieza cargada' : 'piezas cargadas').'.', $tarima, $n);
     }
 
-    /** Bajar del tráiler un embarque cargado por error (solo antes de la salida). */
+
     public function bajar(Embarque $embarque, Tarima $tarima, string $motivo, User $usuario): int {
         return DB::transaction(function () use ($embarque, $tarima, $motivo, $usuario) {
             $embarque = $this->bloquear($embarque, Embarque::EN_CARGA, 'El tráiler ya salió: no se puede bajar nada.');
@@ -178,10 +181,7 @@ class EmbarqueService {
         });
     }
 
-    /**
-     * Salida del tráiler. Se vuelve a revisar cada pieza cargada: pudo retirarse,
-     * anularse su embarque o abrirse una incidencia que bloquea después de subirla.
-     */
+
     public function despachar(Embarque $embarque, array $datos, User $usuario): void {
         DB::transaction(function () use ($embarque, $datos, $usuario) {
             $embarque = $this->bloquear($embarque, Embarque::EN_CARGA, 'El tráiler ya salió.');
@@ -214,7 +214,7 @@ class EmbarqueService {
             $embarque->update([
                 'estado' => Embarque::EN_TRANSITO,
                 'sello' => $datos['sello'] ?? $embarque->sello,
-                'chofer' => $datos['chofer'] ?? $embarque->chofer,
+                'chofer' => $this->choferRegistrado($datos['chofer'] ?? null) ?? $embarque->chofer,
                 'salida_at' => now(),
                 'salida_by' => $usuario->id,
             ]);
@@ -242,7 +242,6 @@ class EmbarqueService {
                 ->get();
 
             if ($cargas->isEmpty()) {
-                // No se asocia a este embarque; queda el rastro para investigarlo.
                 $this->bitacora->registrar('embarque.recepcion_no_esperada', $usuario, $embarque, [
                     'folio' => $embarque->folio, 'escaneo' => $codigo, 'tarima' => $tarima->codigo,
                 ], mudanza: $embarque->mudanza);
@@ -270,8 +269,6 @@ class EmbarqueService {
     }
 
     /**
-     * Cierra la recepción. Lo cargado y no recibido queda como "Faltante en
-     * recepción" en el manifiesto y en el reporte final, y en la bitácora.
      *
      * @return int piezas faltantes
      */
@@ -306,8 +303,6 @@ class EmbarqueService {
     }
 
     /**
-     * Una fila por pieza: cargado vs recibido, para el reporte final (toda la
-     * mudanza) o para el manifiesto de un tráiler.
      *
      * @return list<array>
      */
@@ -341,7 +336,6 @@ class EmbarqueService {
                     $c?->recibidaPor?->name,
                     $this->situacion($p),
                     $p->incidencias->pluck('folio')->join(', ') ?: null,
-                    // Fuera del Excel: solo indica qué celda de N/S va en amarillo.
                     'pendiente_revision' => $p->pendienteRevision(),
                 ];
             })->all();
@@ -373,22 +367,10 @@ class EmbarqueService {
     }
 
     /**
-     * Lo escaneado → embarque completo, o piezas sueltas de un embarque. Acepta
-     * la N/S de una pieza (el código de barras de su etiqueta), "E-004" o
-     * "MUD-0001 · E-004", un SKU que esté en un solo embarque (en recepción, en
-     * uno solo de este tráiler) y, de las etiquetas viejas de tarima, el QR
-     * (URL /t/{uuid}), el código de barras (TAR-{id}|fecha) y "T-004".
-     *
-     * El estado del SKU en la captura (activo o cerrado) no importa: lo que se
-     * carga son piezas de tarimas guardadas.
      *
      * @return array{nombre: string, tarima: Tarima, partidas: ?Collection<int, Partida>}
      */
     private function identificar(Mudanza $mudanza, string $codigo, ?Embarque $enEmbarque = null): array {
-        // Lo que manda el escáner puede venir alterado: caracteres de control, el
-        // prefijo de simbología de DataWedge (]C0, ]Q1) y, si la distribución de
-        // teclado no coincide, "-" convertido en "'" o "?" y "|" en "°" o "¬". Por
-        // eso los separadores se aceptan como cualquier carácter no alfanumérico.
         $codigo = trim((string) preg_replace('/[\x00-\x1F\x7F]+/u', '', $codigo));
         $codigo = (string) preg_replace('/^\][A-Za-z][0-9A-Za-z]/', '', $codigo);
         $sep = '[^0-9a-z]';
@@ -421,7 +403,6 @@ class EmbarqueService {
         return $this->porSku($mudanza, $codigo, $enEmbarque);
     }
 
-    /** Un SKU del catálogo de conversiones también encuentra sus piezas, que quedaron con el SKU convertido. */
     private function porSku(Mudanza $mudanza, string $sku, ?Embarque $enEmbarque): array {
         $partidas = Partida::with('tarima')->where('mudanza_id', $mudanza->id)->whereIn('sku', array_filter([$sku, ConversionSku::cambio($sku)]))->enTarima()
             ->when($enEmbarque,

@@ -1,11 +1,9 @@
 /*
- * Andén y recepción en handheld: escaneo continuo sin recargar.
  *
- * 1. Cada lectura entra a una cola guardada en el equipo (localStorage) y se
+ * 1. Cada lectura entra al localStorage y se
  *    envía en orden. Si no hay red, el servidor tarda o la sesión expiró, la
  *    lectura queda "Pendiente de envío" y se reintenta sola (al volver la red,
- *    al regresar a la app o con el botón). Nunca se muestra "Guardado" sin la
- *    respuesta del servidor.
+ *    al regresar a la app o con el botón).
  * 2. Reintentar no duplica: cargar o recibir lo que ya está en el tráiler
  *    responde "repetido" sin cambiar nada (lo garantiza el servidor). Si un
  *    reintento responde "repetido", el primer envío sí llegó: se muestra como
@@ -13,7 +11,6 @@
  * 3. Una doble lectura del gatillo (mismo código en menos de 1.5 s) se ignora.
  * 4. Lo que el servidor rechaza no bloquea las lecturas siguientes; su aviso
  *    queda en la lista.
- * Sin JavaScript, el formulario funciona como siempre (una recarga por lectura).
  */
 (function () {
   'use strict';
@@ -184,7 +181,7 @@
         almacen.guardar(CLAVE, cola);
         anotar(item, 'pendiente', res.red);
         mostrar('pendiente', `${res.red} La lectura NO se ha guardado todavía.`, item.codigo);
-        if (item.intentos === 1) aviso.error(); // una vez, no en cada reintento
+        if (item.intentos === 1) aviso.error();
         pintarPendientes(res.red);
         if (!res.sesion) {
           reloj = setTimeout(procesar, espera);
@@ -198,7 +195,7 @@
       almacen.guardar(CLAVE, cola);
       espera = 2000;
 
-      // "Repetido" en un reintento = el primer envío sí se guardó.
+
       const estado = res.estado === 'repetido' && item.intentos ? 'ok' : res.estado;
       const texto = estado === 'ok' && res.estado === 'repetido' ? `${res.texto} (confirmado al reconectar)` : res.texto;
       anotar(item, estado, texto);
@@ -210,7 +207,6 @@
       else if (estado === 'repetido') aviso.repetido();
       else {
         aviso.error();
-        // El tráiler cambió de estado (salió, se cerró): la pantalla está desfasada.
         if (/ya salió|todavía no sale|ya se cerró|no está en tránsito/i.test(texto)) setTimeout(() => location.reload(), 2500);
       }
     }

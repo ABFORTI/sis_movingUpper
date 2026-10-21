@@ -39,13 +39,14 @@ Route::middleware(['auth', 'activo'])->group(function () {
     Route::post('/escaneo/padre/cerrar', [EscaneoController::class, 'cerrarPadre'])->name('escaneo.padre.cerrar');
     Route::post('/escaneo/ns', [EscaneoController::class, 'agregarNumeroSerie'])->name('escaneo.ns');
     Route::get('/escaneo/skus', [EscaneoController::class, 'skus'])->middleware('throttle:240,1')->name('escaneo.skus');
-    // Foto de la etiqueta → SKU y N/S leídos por Gemini. Solo propone: no guarda nada.
+    
+    // OCR GEMINI
     Route::post('/escaneo/ocr', [OcrController::class, 'analizar'])->middleware('throttle:20,1')->name('escaneo.ocr');
 
-    // Inventarios por almacén: todos consultan y exportan; cargar es de supervisión (abajo).
+    // INVENTARIOS: importar excel
     Route::get('/inventarios', [InventarioController::class, 'index'])->name('inventarios.index');
     Route::get('/inventarios/{almacen}/excel', [InventarioController::class, 'exportar'])->name('inventarios.exportar');
-    // Alta de un SKU que aún no viene en el inventario: cualquier usuario, desde el handheld.
+     // INVENTARIOS: dar alta sku
     Route::post('/inventarios/skus', [InventarioController::class, 'altaSku'])->middleware('throttle:60,1')->name('inventarios.skus.store');
 
     Route::post('/tarimas', [TarimaController::class, 'store'])->name('tarimas.store');

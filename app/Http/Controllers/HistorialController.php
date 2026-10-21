@@ -39,7 +39,6 @@ class HistorialController extends Controller {
             'filtros' => $filtros,
             'mudanza' => $mudanza,
             'mudanzas' => Mudanza::whereNot('estado', Mudanza::BORRADOR)->orderByDesc('id')->get(),
-            // Opciones del Excel "Por embarque": las mismas que entran al Excel completo, sin filtros de texto.
             'embarquesExcel' => Tarima::exportables()->where('mudanza_id', $mudanza?->id ?? 0)->orderBy('numero')->get(['id', 'numero']),
             'urlsQr' => $tarimas->getCollection()->mapWithKeys(fn (Tarima $t) => [$t->id => $this->tarimas->urlDetalle($t)]),
         ]);

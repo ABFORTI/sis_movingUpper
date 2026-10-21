@@ -52,10 +52,6 @@ class InventarioController extends Controller {
                 .($atencion ? ' Hay filas que requieren atención: revisa el detalle.' : ''));
     }
 
-    /**
-     * Alta de un SKU solo con su código (descripción opcional), para escanear un
-     * producto que todavía no viene en el inventario de Excel del almacén.
-     */
     public function altaSku(Request $request, InventarioService $inventario, BitacoraService $bitacora): RedirectResponse {
         $datos = $request->validateWithBag('altaSku', [
             'almacen' => ['required', 'integer', 'exists:almacenes,id'],
@@ -91,10 +87,7 @@ class InventarioController extends Controller {
         return $excel->descargar($carga);
     }
 
-    /**
-     * Primero los almacenes de origen de la mudanza en curso (los que se
-     * escanean), luego los de destino y después los demás almacenes registrados.
-     */
+
     private function almacenes(Collection $movimientos): Collection {
         $deLaMudanza = $movimientos->pluck('origen')->merge($movimientos->pluck('destino'))->unique('id');
 

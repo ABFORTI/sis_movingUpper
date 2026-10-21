@@ -10,12 +10,7 @@ use App\Services\EmbarqueService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Elimina tráileres vacíos (en carga y sin piezas) y vuelve a numerar los
- * demás de la mudanza en orden de creación: TRL-0001, TRL-0002… El contador
- * queda en el último, así el siguiente tráiler sigue la secuencia. La bitácora
- * conserva los folios anteriores y se le agrega la equivalencia.
- */
+
 class RenumerarTrailers extends Command {
     protected $signature = 'trailers:renumerar
         {--eliminar=* : Folio de un tráiler vacío a eliminar antes de renumerar (se puede repetir)}

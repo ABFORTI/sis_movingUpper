@@ -89,108 +89,12 @@ Reglas comunes:
     Es `null` si `anterior = 0`. **Puede ser negativo o mayor a 100**: es una
     variación, no una proporción 0–100 como describe ESTANDAR.md §7.3.
 
-### 3.1 `numeros-serie-escaneados`
 
-| | |
-|---|---|
-| Fuente | `numeros_serie` (`NumeroSerie`), fecha `numeros_serie.created_at` = fecha y hora del escaneo |
-| Cuenta | Cada N/S viva, en tarimas temporales y guardadas |
-| `usuario` | `numeros_serie.user_id` (quien escaneó) |
-| `producto` | SKU padre de la N/S (`registros.sku`, registro vivo) |
-
-| Campo | Fórmula |
-|---|---|
-| `total_numeros_serie` | `COUNT(*)` de N/S vivas con `created_at` en la cubeta |
-| `total_periodo_anterior`, `porcentaje_variacion` | Sobre `total_numeros_serie` |
-
-**Escaneos contra N/S únicas.** El índice único `numero_serie_activo` impide que
-existan dos N/S vivas iguales en todo el sistema, así que *total = únicas* y no
-se publica un campo aparte. Una N/S que se envía a la papelera y se vuelve a
-escanear cuenta **una vez**, en la fecha de su último escaneo. Los escaneos
-rechazados por duplicados no se guardan, así que no hay forma de contarlos.
-
-### 3.2 `tarimas-registradas`
-
-| | |
-|---|---|
-| Fuente | `tarimas` guardadas (`guardada_at IS NOT NULL`), fecha `tarimas.guardada_at` |
-| Cuenta | Cada tarima que pasó al historial. Las temporales (en captura) no cuentan |
-| `usuario` | `tarimas.guardada_by` (quien la guardó) |
-| `producto` | Tarimas que contienen alguno de los SKUs (registro vivo). Una tarima con varios SKUs filtrados cuenta una vez (`EXISTS`, no `JOIN`) |
-
-| Campo | Fórmula |
-|---|---|
-| `total_tarimas` | `COUNT(*)` de tarimas con `guardada_at` en la cubeta |
-
-### 3.3 `skus-registrados`
-
-| | |
-|---|---|
-| Fuente | `registros` vivos (`Registro`), fecha `registros.created_at` |
-| Cuenta | Cada SKU capturado en una tarima. El mismo SKU en dos tarimas son dos registros |
-| `usuario` | `registros.user_id` (quien lo capturó) |
-| `producto` | `registros.sku` |
-
-| Campo | Fórmula |
-|---|---|
-| `total_registros` | `COUNT(*)` de registros |
-| `total_registros_padre` | registros con `tipo = 'padre'` (llevan N/S) |
-| `total_registros_simples` | `total_registros − total_registros_padre` |
-| `total_skus_distintos` | `COUNT(DISTINCT LOWER(sku))` dentro de la cubeta |
-
-La comparación usa `total_registros`.
-
-### 3.4 `etiquetas-impresas`
-
-| | |
-|---|---|
-| Fuente | `impresiones` (`Impresion`), fecha `impresiones.created_at` |
-| Cuenta | Cada **confirmación** de impresión: el usuario pulsa "Sí, se imprimió bien" en la pantalla de etiqueta (`POST /tarimas/{uuid}/impresion`) |
-| `usuario` | `impresiones.user_id` (quien confirmó) |
-
-| Campo | Fórmula |
-|---|---|
-| `total_etiquetas` | `SUM(etiquetas)`: etiquetas físicas de cada impresión, según el diseño en uso (`EtiquetaService::paginas`) |
-| `total_impresiones` | `COUNT(*)` |
-| `total_reimpresiones` | impresiones con `es_reimpresion = 1` (la tarima ya tenía una impresión anterior, sin importar la fecha) |
-| `total_tarimas_impresas` | `COUNT(DISTINCT tarima_id)` dentro de la cubeta |
-| `total_impresiones_sin_conteo` | impresiones con `etiquetas IS NULL` (históricas) |
-
-La comparación usa `total_etiquetas`.
-
-**Registro de impresiones.** Antes de esta API, el sistema solo guardaba
-`tarimas.impresa_at`. Ese campo guarda una sola fecha, se borra si cambia el
-contenido de la tarima y no registra reimpresiones. Por eso se agregó la tabla
-`impresiones`, que se llena en `ImpresionService::registrar`. La migración
-crea **una impresión histórica por cada tarima con `impresa_at`**, en esa fecha,
-sin usuario ni número de etiquetas. Mientras un periodo tenga
-`total_impresiones_sin_conteo > 0`, su `total_etiquetas` está incompleto.
-
-No se registran los envíos que el usuario no confirma ("No, imprimir de nuevo").
-Tampoco las etiquetas que salieron mal y se desecharon.
-
-### 3.5 `productividad-por-usuario`
-
-Tabla con un renglón por usuario con actividad en el periodo. Solo admite
-`agrupacion=total` y es paginable (`pagina`, `por_pagina`).
-
-| Campo | Fórmula |
-|---|---|
-| `usuario_id`, `usuario_nombre` | `users.id` / `users.name`. `null`/`null` agrupa la actividad de usuarios eliminados (las FK son `nullOnDelete`) |
-| `total_numeros_serie` | Igual que `numeros-serie-escaneados`, por `user_id` |
-| `total_registros` | Igual que `skus-registrados`, por `user_id` |
-| `total_tarimas` | Igual que `tarimas-registradas`, por `guardada_by` |
-| `total_impresiones` | Igual que `etiquetas-impresas` → `total_impresiones`, por `user_id` |
-
-Orden: `total_numeros_serie`, `total_registros`, `total_tarimas` y
-`total_impresiones` descendentes; desempate por `usuario_id`. La suma de cada
-columna es igual al `agrupacion=total` del KPI equivalente para el mismo periodo.
-Solo se expone el nombre (no correo).
 
 ## 4. Ejemplos
 
 ```bash
-TOKEN=...   # php artisan api:token ...
+TOKEN=...
 BASE=https://movingupper.upperlogistics.mx/api/v3
 
 curl -H "Authorization: Bearer $TOKEN" $BASE/kpis
@@ -294,30 +198,3 @@ El estándar no usa 400: todo error de parámetros es 422.
 6. Producción usa MySQL y las pruebas automáticas usan SQLite. Las consultas solo
    usan funciones comunes a ambos, pero se recomienda una prueba de humo contra
    MySQL al desplegar.
-
-## 8. Diferencias encontradas entre la documentación y el código (resueltas)
-
-| Hallazgo | Fuente de verdad | Acción |
-|---|---|---|
-| `app/KpiApi/Expections/ExceptionRender.php` declaraba `App\KpiApi\Exceptions\ExceptionRenderer` (PSR-4 roto) | El código del kit (namespace) | Carpeta y archivo renombrados a `Exceptions/ExceptionRenderer.php`; contenido intacto |
-| IMPLEMENTACION.md pide copiar `IssueApiToken` y `ConformidadEstandarTest` del sistema de Cotizaciones; no estaban en el repositorio | ESTANDAR.md | Escritos según el estándar: `app/Console/Commands/IssueApiToken.php`, `tests/Feature/KpiApi/ConformidadEstandarTest.php` |
-| Sanctum no estaba instalado ni `routes/api.php` existía | IMPLEMENTACION.md §0 | `laravel/sanctum` instalado, `personal_access_tokens`, `HasApiTokens` en `User` |
-| Sanctum trae `guard => ['web']`: una sesión web pasaría `abilities:kpis:read` | ESTANDAR.md §10.3 | `guard => []` en `config/sanctum.php` |
-| ESTANDAR.md §2 (sistemas nuevos en `v1`) contra el requerimiento `/api/v3` | Decisión del proyecto | Publicado en `v3`, documentado arriba |
-| ESTANDAR.md §13.3 pide usar `agruparPorPeriodo()` | ESTANDAR.md | Se usa, alimentado con agregados diarios en lugar de registros |
-
-## 9. Pruebas
-
-```bash
-php artisan test tests/Feature/KpiApi
-```
-
-- `ConformidadEstandarTest`: el contrato del estándar para todos los KPIs de
-  `config/kpi-api.php`. Cubre sobre, headers, 401/403/404/405/422/429, catálogo,
-  series sin huecos en cada agrupación, periodo por defecto y `X-Request-Id`.
-- `MovingUpperKpisTest`: valores concretos.
-  - Datos: sin datos, un registro, varios días, semanas ISO, cambio de mes,
-    trimestre y año, comparación con el periodo anterior.
-  - Reglas: N/S borrada y reescaneada, filtros, tarimas con varios SKUs,
-    padre/simple/distintos, bitácora de impresiones y backfill.
-  - Productividad: orden, paginación y usuarios eliminados.

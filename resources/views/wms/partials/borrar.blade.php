@@ -8,10 +8,6 @@
 @endif
 
 @can('anular', $tarima)
-  {{--
-    En captura, anular elimina el embarque (su número solo se reutiliza si es el
-    último asignado). Ya guardado no se borra: conserva número y contenido y sale de los Excel.
-  --}}
   <form method="POST" action="{{ route('tarimas.anular', $tarima) }}"
         data-motivo="{{ $tarima->estaGuardada()
             ? "¿Anular {$tarima->nombre}? Conserva su número y su contenido; no se puede deshacer."

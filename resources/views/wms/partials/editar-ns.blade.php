@@ -1,14 +1,3 @@
-{{--
-  "Editar números de serie" de un modelo (SKU) del embarque en captura. Plegado
-  por omisión para que el handheld no se llene de N/S. Al abrirlo:
-  - Marcar como dañado / quitar marca (siempre, hasta guardar): al guardar el
-    embarque, cada N/S marcada abre su incidencia de "Producto dañado".
-  - Agregar, editar (SKU o N/S) y eliminar: solo mientras no se haya impreso
-    ninguna etiqueta del embarque (EscaneoService::asegurarSinEtiquetas).
-  Las casillas pertenecen al formulario de acciones por el atributo form=, así
-  cada fila puede tener su propio formulario de edición sin anidar formularios.
---}}
-
 @php
   $series = $registro->numerosSerie;
   $marcadas = $series->filter->tieneAnomalia();

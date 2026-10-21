@@ -10,12 +10,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/**
- * Excel del inventario vigente de un almacén, para consultarlo durante el
- * escaneo. Es distinto de los Excel de la mudanza (entregas, embarques): no
- * lleva consecutivos ni formato de incidencias. Además de los campos del
- * inventario indica si cada producto ya se registró, con qué N/S y en qué tarima.
- */
+
 class InventarioExcel {
     private const TIPO = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -78,7 +73,7 @@ class InventarioExcel {
         }, $nombre, ['Content-Type' => self::TIPO]);
     }
 
-    /** Texto explícito: las series y los SKU nunca se convierten a número (se perderían ceros a la izquierda). */
+
     private function fila(Worksheet $hoja, int $r, array $valores): void {
         foreach (array_values($valores) as $c => $valor) {
             if ($valor === null || $valor === '') {

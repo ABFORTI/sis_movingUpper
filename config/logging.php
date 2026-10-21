@@ -34,7 +34,6 @@ return [
             'replace_placeholders' => true,
         ],
 
-        // Fallas de impresión reportadas por los navegadores (Bluetooth, Browser Print).
         'impresion' => [
             'driver' => 'daily',
             'path' => storage_path('logs/impresion.log'),

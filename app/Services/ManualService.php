@@ -10,10 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
-/**
- * Guarda los PDF en el disco privado con un nombre generado (UUID + .pdf):
- * el nombre que envía el usuario nunca llega al sistema de archivos.
- */
+
 class ManualService {
     public function crear(array $datos, UploadedFile $pdf, User $usuario): Manual {
         $archivo = $this->almacenar($pdf);
@@ -30,7 +27,7 @@ class ManualService {
         }
     }
 
-    /** Si llega un PDF nuevo, reemplaza al anterior y lo borra solo después de guardar. */
+
     public function actualizar(Manual $manual, array $datos, ?UploadedFile $pdf, User $usuario): Manual {
         if (! $pdf) {
             $manual->update($datos);

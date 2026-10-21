@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Copia de una pieza tal como se entregó en una versión. Inmutable. */
+
 class EntregaPartida extends Model {
     public const NUEVA = 'nueva';
     public const CAMBIO_TARIMA = 'tarima';

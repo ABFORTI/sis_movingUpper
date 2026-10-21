@@ -52,6 +52,4 @@ return [
     'CHC400HC17' => 'CHC400',
     'CHC300HC17' => 'CHC300',
 
-
-    
 ];

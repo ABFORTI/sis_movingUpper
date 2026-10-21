@@ -6,15 +6,9 @@ use App\KpiApi\AbstractKpi;
 use App\KpiApi\Exceptions\KpiApiException;
 use App\KpiApi\KpiQuery;
 
-/**
- * Base de los KPIs de MovingUpper: traduce los filtros generales del estándar a
- * este sistema. Solo aplican `usuario` (users.id) y `producto` (SKU); no existen
- * área, cliente ni turno en el modelo de datos.
- */
+
 abstract class MovingUpperKpi extends AbstractKpi {
     /**
-     * IDs del filtro `usuario`, o null si no se envió. Un valor no numérico es un
-     * error del consumidor (422), no un filtro que simplemente no encuentra datos.
      *
      * @return list<int>|null
      */

@@ -4,7 +4,6 @@
   $movimientos = collect(old('movimientos', $mudanza->exists
       ? $mudanza->movimientos->map(fn ($m) => ['origen' => $m->origen->codigo, 'destino' => $m->destino->codigo])->all()
       : []));
-  // Siempre queda un renglón vacío para agregar otro movimiento.
   $movimientos = $movimientos->push(['origen' => '', 'destino' => ''])->values();
 @endphp
 
@@ -89,7 +88,6 @@
 
 @push('scripts')
 <script>
-  // Agregar o quitar renglones de movimiento. Sin JavaScript queda un renglón vacío extra.
   (function () {
     const lista = document.querySelector('[data-movimientos]');
     if (!lista) return;

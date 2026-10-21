@@ -7,40 +7,41 @@
   $seccion = fn (string $ruta, string $activa, string $icono, string $texto, int $contador = 0, string $contadorTexto = '') =>
       compact('ruta', 'activa', 'icono', 'texto', 'contador', 'contadorTexto');
 
-  // Lo de todos los días: siempre en la barra (y en las pestañas del celular).
+
   $primarias = [
       $seccion('wms', 'wms,etiquetas.*', 'scan', 'Escaneo'),
       $seccion('historial', 'historial', 'clock', 'Historial'),
       $seccion('incidencias.index', 'incidencias.*', 'alert', 'Incidencias', $incidenciasAbiertas, 'abiertas'),
       $seccion('embarques.index', 'embarques.*', 'truck', 'Tráileres'),
   ];
-  // En la barra de la computadora; en el celular van en "Más".
+
   $secundarias = [$seccion('inventarios.index', 'inventarios.*', 'sheet', 'Inventarios')];
   if ($usuario->esSupervision()) {
       $secundarias[] = $seccion('entregas.index', 'entregas.*', 'file-text', 'Reporte Diario');
   }
-  // Administración y consulta: en "Más" (en la computadora solo si es admin).
+
   $terciarias = [$seccion('manuales.index', 'manuales.*', 'book', 'Manuales')];
   if ($usuario->isAdmin()) {
       $terciarias[] = $seccion('mudanzas.index', 'mudanzas.*', 'layers', 'Mudanzas');
       $terciarias[] = $seccion('usuarios.index', 'usuarios.*', 'users', 'Usuarios');
       $terciarias[] = $seccion('impresoras.index', 'impresoras.*', 'printer', 'Impresoras');
+  } elseif ($usuario->hasRole(\App\Models\Role::AUDITOR)) {
+      $terciarias[] = $seccion('mudanzas.index', 'mudanzas.*', 'layers', 'Mudanzas');
   } else {
-      // El auditor crea y activa mudanzas.
-      if ($usuario->hasRole(\App\Models\Role::AUDITOR)) {
-          $terciarias[] = $seccion('mudanzas.index', 'mudanzas.*', 'layers', 'Mudanzas');
-      }
       $secundarias = [...$secundarias, ...$terciarias];
       $terciarias = [];
   }
+  $enMasEscritorio = $usuario->hasRole(\App\Models\Role::AUDITOR) && ! $usuario->isAdmin()
+      ? collect($primarias)->where('ruta', 'incidencias.index')->values()->all()
+      : [];
 
-  // Celular: hasta 5 pestañas; si no caben todas, 4 + "Más".
   $todasEnPestanas = count($primarias) + count($secundarias) + count($terciarias) <= 5;
   $enMasMovil = $todasEnPestanas ? [] : [...$secundarias, ...$terciarias];
   $hayMas = $terciarias !== [] || $enMasMovil !== [];
   $activa = fn (array $s) => request()->routeIs(...explode(',', $s['activa']));
   $masActiva = collect([...$secundarias, ...$terciarias])->contains($activa);
   $avisosEnMas = collect($enMasMovil)->sum('contador');
+  $avisosEnMasEscritorio = collect($enMasEscritorio)->sum('contador');
 @endphp
 
 <header class="topbar">
@@ -51,7 +52,8 @@
       @foreach ([...$primarias, ...$secundarias] as $i => $s)
         @php $esSecundaria = $i >= count($primarias); @endphp
         <a href="{{ route($s['ruta']) }}" title="{{ $s['texto'] }}"
-           @class(['nav-link', 'is-active' => $activa($s), 'nav-solo-escritorio' => $esSecundaria && ! $todasEnPestanas])
+           @class(['nav-link', 'is-active' => $activa($s), 'nav-solo-escritorio' => $esSecundaria && ! $todasEnPestanas,
+                   'nav-solo-movil' => in_array($s, $enMasEscritorio, true)])
            @if ($activa($s)) aria-current="page" @endif>
           <x-icon :name="$s['icono']" /><span class="nav-texto">{{ $s['texto'] }}</span>
           @if ($s['contador'])<b class="nav-contador" aria-label="{{ $s['contador'] }} {{ $s['contadorTexto'] }}">{{ $s['contador'] }}</b>@endif
@@ -63,6 +65,7 @@
           <summary @class(['nav-link', 'is-active' => $masActiva]) title="Más secciones">
             <x-icon name="menu" /><span class="nav-texto">Más</span>
             @if ($avisosEnMas)<b class="nav-contador nav-solo-movil" aria-label="{{ $avisosEnMas }} pendientes">{{ $avisosEnMas }}</b>@endif
+            @if ($avisosEnMasEscritorio)<b class="nav-contador nav-solo-escritorio" aria-label="{{ $avisosEnMasEscritorio }} pendientes">{{ $avisosEnMasEscritorio }}</b>@endif
           </summary>
           <div class="nav-mas-panel">
             <p class="nav-mas-usuario">
@@ -74,6 +77,12 @@
               <a href="{{ route($s['ruta']) }}" @class(['nav-mas-link', 'nav-solo-movil', 'is-active' => $activa($s)])>
                 <x-icon :name="$s['icono']" /><span>{{ $s['texto'] }}</span>
                 @if ($s['contador'])<b class="nav-contador">{{ $s['contador'] }}</b>@endif
+              </a>
+            @endforeach
+            @foreach ($enMasEscritorio as $s)
+              <a href="{{ route($s['ruta']) }}" @class(['nav-mas-link', 'nav-solo-escritorio', 'is-active' => $activa($s)])>
+                <x-icon :name="$s['icono']" /><span>{{ $s['texto'] }}</span>
+                @if ($s['contador'])<b class="nav-contador" aria-label="{{ $s['contador'] }} {{ $s['contadorTexto'] }}">{{ $s['contador'] }}</b>@endif
               </a>
             @endforeach
             @foreach ($terciarias as $s)
@@ -103,7 +112,7 @@
     </div>
   </div>
 
-  {{-- Siempre visible, en su propia franja: evita registrar mercancía pensando que es otra mudanza. --}}
+
   <div @class(['mudanza-franja', 'is-captura' => $mudanzaEnCurso?->permiteCaptura()])
        title="{{ $mudanzaEnCurso ? "Movimientos: {$mudanzaEnCurso->rutas}" : '' }}">
     <x-icon name="truck" class="icon-sm" />

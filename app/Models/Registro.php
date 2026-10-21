@@ -44,7 +44,6 @@ class Registro extends Model {
         return $this->hasMany(NumeroSerie::class)->orderBy('id');
     }
 
-    /** Se registró con el equivalente del catálogo de conversiones; sku_original es el SKU escaneado. */
     public function fueConvertido(): bool {
         return $this->sku_original !== null;
     }

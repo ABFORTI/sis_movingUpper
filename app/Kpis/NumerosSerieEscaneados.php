@@ -7,12 +7,7 @@ use App\Models\NumeroSerie;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
-/**
- * N/S escaneados vivos por fecha de escaneo (numeros_serie.created_at), en
- * tarimas temporales y guardadas. El índice único de numero_serie_activo impide
- * dos N/S vivos iguales, así que el total es también el de N/S únicos: una N/S
- * borrada (papelera) y vuelta a escanear cuenta una sola vez, en su último escaneo.
- */
+
 class NumerosSerieEscaneados extends SerieDiariaKpi {
     public function clave(): string { return 'numeros-serie-escaneados'; }
     public function nombre(): string { return 'Números de serie escaneados'; }

@@ -20,7 +20,7 @@
     </div>
   </div>
 
-  {{-- El mismo día filtra lo que se ve y lo que entra al Excel. --}}
+
   <form method="GET" class="filters filtros-dia" role="search" aria-label="Elegir el día del reporte">
     @if ($mudanzas->count() > 1)
       <div class="field">

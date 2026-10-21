@@ -8,11 +8,7 @@ use App\Services\Inventario\InventarioService;
 use Illuminate\Database\Eloquent\Collection;
 use InvalidArgumentException;
 
-/**
- * Una etiqueta por pieza escaneada (EtiquetaPieza). El ZPL de varias piezas es
- * la concatenación de sus etiquetas (^XA…^XZ cada una): la impresora las saca
- * una tras otra con el mismo mecanismo de siempre.
- */
+
 class EtiquetaService {
     public function __construct(
         private readonly EtiquetaPieza $diseno,
@@ -21,7 +17,7 @@ class EtiquetaService {
         private readonly SvgRenderer $svg,
     ) { }
 
-    /** "12,15,16" (como viaja en la URL de impresión) → [12, 15, 16]; vacío o ausente → null (todas). */
+
     public static function ids(mixed $valor): ?array {
         $ids = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) $valor)))));
 
@@ -29,8 +25,6 @@ class EtiquetaService {
     }
 
     /**
-     * Piezas (N/S vivas) del embarque, en el orden en que se escanearon. Con
-     * $ids, solo esas (las que no son de este embarque se ignoran).
      *
      * @param  list<int>|null  $ids
      * @return Collection<int, NumeroSerie>
@@ -43,18 +37,12 @@ class EtiquetaService {
             ->get();
     }
 
-    /** Piezas del embarque que todavía no tienen su etiqueta impresa. */
+
     public function pendientes(Tarima $tarima): Collection {
         return $this->piezas($tarima)->filter->etiquetaPendiente()->values();
     }
 
     /**
-     * El modelo que va en la etiqueta: el del renglón del inventario con que
-     * coincidió la N/S; si no tiene (o la N/S se registró como incidencia), el
-     * del SKU en el inventario del almacén de origen; si tampoco hay, el SKU.
-     * Un SKU convertido (catálogo de conversiones) se imprime como modelo: el
-     * SKU anterior va debajo (EtiquetaPieza).
-     *
      * @return array<int, string> por id de N/S
      */
     public function modelos(Tarima $tarima, Collection $piezas): array {

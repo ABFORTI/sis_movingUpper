@@ -10,12 +10,7 @@ use App\Models\Tarima;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
-/**
- * Desglose por usuario de la actividad del periodo, con las mismas reglas de
- * conteo que los KPIs de serie: la suma de una columna coincide con el
- * agrupacion=total del KPI equivalente. Son cuatro GROUP BY user_id (uno por
- * tabla) más una consulta de nombres, sin importar cuántos usuarios haya.
- */
+
 class ProductividadPorUsuario extends MovingUpperKpi {
     public function clave(): string { return 'productividad-por-usuario'; }
     public function nombre(): string { return 'Productividad por usuario'; }
@@ -51,7 +46,7 @@ class ProductividadPorUsuario extends MovingUpperKpi {
             'total_impresiones' => $this->porUsuario($consulta, Impresion::query(), 'impresiones.created_at', 'impresiones.user_id'),
         ];
 
-        // '' agrupa user_id NULL (usuario eliminado: las FK son nullOnDelete).
+        
         $ids = collect($conteos)->flatMap(fn (array $porUsuario) => array_keys($porUsuario))->unique();
         $nombres = User::whereIn('id', $ids->filter(fn ($id) => $id !== '')->all())->pluck('name', 'id');
 

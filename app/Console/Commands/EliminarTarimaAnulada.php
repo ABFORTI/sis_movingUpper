@@ -11,12 +11,7 @@ use App\Support\Contador;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Elimina por completo un embarque anulado: sus piezas, N/S, movimientos,
- * impresiones e incidencias. Se niega si alguna de sus piezas se cargó en un
- * tráiler o salió en un Reporte Diario. La bitácora se conserva y se le agrega
- * el borrado. Su número solo se reutiliza si es el último de la mudanza.
- */
+
 class EliminarTarimaAnulada extends Command {
     protected $signature = 'tarimas:eliminar-anulada
         {embarque : Número del embarque, p. ej. E-001}

@@ -33,6 +33,8 @@ class EmbarqueController extends Controller {
                 ->withCount(['cargas', 'cargas as recibidas_count' => fn ($q) => $q->whereNotNull('recibida_at')])
                 ->orderByDesc('id')->get(),
             'resumen' => $mudanza ? $this->embarques->resumen($mudanza) : null,
+            // Solo supervisión registra tráileres (formulario "Nuevo tráiler").
+            'sugerencias' => $request->user()->esSupervision() && $mudanza?->estaEnCurso() ? $this->embarques->sugerencias() : [],
         ]);
     }
 
@@ -66,6 +68,8 @@ class EmbarqueController extends Controller {
             ])->sortByDesc('cargada_at')->values(),
             'total' => $cargas->count(),
             'recibidas' => $cargas->whereNotNull('recibida_at')->count(),
+            // El chofer se confirma en la salida.
+            'sugerencias' => auth()->user()->esSupervision() && $embarque->enCarga() ? $this->embarques->sugerencias(['chofer']) : [],
         ]);
     }
 

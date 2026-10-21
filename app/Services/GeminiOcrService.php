@@ -8,40 +8,34 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use JsonException;
 
-/**
- * Lee la etiqueta de una pieza con Gemini y devuelve el SKU/modelo y el N/S.
- *
- * Solo propone valores: no consulta el inventario ni guarda nada. Lo que no se
- * lee con certeza vuelve como null (nunca se completa ni se adivina) y el
- * operador confirma la N/S en el flujo normal de escaneo.
- */
+
 class GeminiOcrService {
-    /** Lo que se acepta como SKU, modelo o N/S: sin espacios ni símbolos raros. */
     private const PATRON_CODIGO = '/^[A-Za-z0-9][A-Za-z0-9\-\/._#]*$/';
     private const MAX_CARACTERES = 150;
 
-    private const PROMPT = <<<'PROMPT'
-Eres un sistema OCR de etiquetas de productos industriales en un almacén.
-Lee la etiqueta de la imagen y extrae SOLO texto visible:
+    private const PROMPT = 
+    <<<'PROMPT'
+        Eres un sistema OCR de etiquetas de productos industriales en un almacén.
+        Lee la etiqueta de la imagen y extrae SOLO texto visible:
 
-- "sku": el SKU, número de parte o código de producto (rótulos como SKU, P/N, Part No., Item, Código, REF).
-- "modelo": el modelo (rótulos como Model, Modelo, MOD, Type).
-- "numero_serie": el número de serie de ESTA unidad (rótulos como S/N, SN, Serial No., N/S, No. de serie).
-  Si hay varios números de serie, elige el rotulado como S/N y menciona los demás en "observaciones".
-- "observaciones": avisos breves en español (texto borroso, cortado, varias etiquetas, etc.).
+        - "sku": el SKU, número de parte o código de producto (rótulos como SKU, P/N, Part No., Item, Código, REF).
+        - "modelo": el modelo (rótulos como Model, Modelo, MOD, Type).
+        - "numero_serie": el número de serie de ESTA unidad (rótulos como S/N, SN, Serial No., N/S, No. de serie).
+        Si hay varios números de serie, elige el rotulado como S/N y menciona los demás en "observaciones".
+        - "observaciones": avisos breves en español (texto borroso, cortado, varias etiquetas, etc.).
 
-Reglas:
-- Devuelve el valor sin su rótulo (sin "S/N:", "Model:", etc.).
-- Conserva exactamente letras, números, guiones, ceros y mayúsculas.
-- No inventes datos ni completes caracteres ilegibles: si algún carácter es dudoso, usa null.
-- No confundas el SKU o el modelo con el número de serie; si no puedes distinguirlos, usa null.
-- Un código de barras sin texto legible debajo no cuenta como lectura.
-PROMPT;
+        Reglas:
+        - Devuelve el valor sin su rótulo (sin "S/N:", "Model:", etc.).
+        - Conserva exactamente letras, números, guiones, ceros y mayúsculas.
+        - No inventes datos ni completes caracteres ilegibles: si algún carácter es dudoso, usa null.
+        - No confundas el SKU o el modelo con el número de serie; si no puedes distinguirlos, usa null.
+        - Un código de barras sin texto legible debajo no cuenta como lectura.
+    PROMPT;
 
     /**
      * @return array{sku: ?string, modelo: ?string, numero_serie: ?string, observaciones: list<string>}
      *
-     * @throws OcrException si Gemini no está configurado, no responde o responde algo inutilizable.
+     * @throws OcrException
      */
     public function analizar(string $rutaImagen, string $mimeType): array {
         $apiKey = config('services.gemini.api_key');
@@ -85,14 +79,12 @@ PROMPT;
             throw new OcrException('Se alcanzó el límite de lecturas por foto. Espera un minuto o escribe la N/S a mano.', 429);
         }
         if ($respuesta->failed()) {
-            // Sin la imagen ni la clave en el log: solo lo necesario para diagnosticar.
             Log::error('OCR Gemini: error del servicio', ['status' => $respuesta->status(), 'error' => $respuesta->json('error.message')]);
             throw new OcrException('No fue posible leer la foto en este momento. Escribe la N/S a mano.', 502);
         }
 
         $texto = $respuesta->json('candidates.0.content.parts.0.text');
         if (! is_string($texto) || trim($texto) === '') {
-            // Bloqueo de seguridad, imagen vacía o sin candidatos.
             Log::warning('OCR Gemini sin texto', ['finishReason' => $respuesta->json('candidates.0.finishReason'), 'bloqueo' => $respuesta->json('promptFeedback.blockReason')]);
             throw new OcrException('No se pudo leer la etiqueta. Toma otra foto más cerca y con buena luz.', 422);
         }
@@ -120,7 +112,6 @@ PROMPT;
         ];
     }
 
-    /** Un valor que no parece código (espacios, símbolos, demasiado largo) se descarta, no se corrige. */
     private function codigo(mixed $valor): ?string {
         if (! is_string($valor)) {
             return null;

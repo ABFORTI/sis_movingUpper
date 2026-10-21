@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Una confirmación de impresión de la etiqueta de una tarima. */
+
 class Impresion extends Model {
     public const UPDATED_AT = null;
 

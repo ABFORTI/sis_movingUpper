@@ -1,17 +1,3 @@
-/*
- * Selector de SKU con búsqueda (combobox accesible).
- *
- * - Las opciones salen del inventario del almacén de origen del embarque
- *   elegida: se piden al servidor por texto (pocas a la vez), nunca se carga el
- *   inventario completo.
- * - Al elegir un SKU, la descripción se completa sola con la del inventario
- *   (solo lectura: el servidor la vuelve a tomar del inventario).
- * - Escanear el SKU + Enter elige la opción idéntica y envía. Enter solo elige
- *   de la lista si se navegó con las flechas: la lista visible puede ser de una
- *   búsqueda anterior a la lectura y no debe reemplazar lo escaneado.
- * - Respuestas tardías se descartan: solo cuenta la última consulta.
- * - Sin JavaScript se puede escribir el SKU exacto; el servidor lo valida igual.
- */
 (function () {
   'use strict';
 
@@ -33,7 +19,7 @@
   let reloj = null;
   let hayInventario = true;
   let elegido = null;
-  let navegando = false; // se movió por la lista con las flechas desde lo último escrito
+  let navegando = false;
 
   function normal(texto) { return (texto || '').trim().toUpperCase(); }
 
@@ -80,7 +66,6 @@
       texto.className = 'combo-texto';
       texto.textContent = [o.alta ? 'Alta sin N/S' : null, o.modelo, o.descripcion].filter(Boolean).join(' · ') || '(sin descripción)';
       li.append(sku, texto);
-      // mousedown: se elige antes de que el campo pierda el foco.
       li.addEventListener('mousedown', e => { e.preventDefault(); elegir(o); input.focus(); });
       lista.appendChild(li);
     });
@@ -102,7 +87,7 @@
       if (mia === consulta) aviso('No se pudo consultar el inventario. Revisa la conexión.', 'error');
       return null;
     }
-    if (mia !== consulta) return null; // llegó tarde: ya hay una consulta más nueva
+    if (mia !== consulta) return null;
 
     hayInventario = datos.inventario;
     input.disabled = !hayInventario;
@@ -143,12 +128,10 @@
       cerrar();
     } else if (e.key === 'Enter') {
       if (navegando && !lista.hidden && activa >= 0 && opciones[activa] && normal(input.value) !== normal(opciones[activa].sku)) {
-        // Elegir de la lista sin enviar todavía.
         e.preventDefault();
         elegir(opciones[activa]);
         return;
       }
-      // Lectura del escáner o SKU escrito completo: se envía; el servidor lo valida.
       const exacta = opciones.find(o => normal(o.sku) === normal(input.value));
       if (exacta) elegir(exacta);
     }
@@ -167,7 +150,6 @@
     if (!hayInventario) { e.preventDefault(); input.focus(); }
   });
 
-  // Estado inicial: ¿hay inventario para el embarque? ¿venía un SKU de un intento anterior?
   (async () => {
     const previo = input.value;
     const datos = await buscar(previo, { mostrarLista: false });

@@ -11,11 +11,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
-/**
- * Contrato de ESTANDAR.md v1.0 para TODOS los KPIs de config/kpi-api.php:
- * sobre JSON, headers, 401/403/404/405/422/429, catálogo, series sin huecos y
- * campos iguales a los declarados. Un KPI nuevo queda cubierto al registrarlo.
- */
+
 class ConformidadEstandarTest extends TestCase {
     use RefreshDatabase;
 

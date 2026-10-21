@@ -181,11 +181,10 @@
             </div>
 
             <div class="captura-opciones" role="group" aria-label="Otras formas de capturar la N/S">
-
-              <button  type="button" class="captura-opcion" data-captura-foto data-url="{{ route('escaneo.ocr') }}"
+              <button type="button" class="captura-opcion captura-opcion-foto" data-captura-foto data-url="{{ route('escaneo.ocr') }}"
                       @disabled(! $skuActivo && $tarimas->isEmpty())>
-                <x-icon name="camera" />
-                <span><b>Foto del N/S</b><small data-foto-texto>Leer SKU y N/S de la etiqueta</small></span>
+                <span class="tile" aria-hidden="true"><x-icon name="camera" /></span>
+                <span><b>Fotos del N/S</b><small data-foto-texto>{{ $skuActivo ? 'Toma una foto de la etiqueta para leer la N/S' : 'Toma una foto de la etiqueta para leer el SKU y la N/S' }}</small></span>
               </button>
               <input type="file" accept="image/*" capture="environment" hidden data-foto-archivo aria-label="Foto de la etiqueta">
             </div>

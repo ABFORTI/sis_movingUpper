@@ -7,7 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
 class MudanzaRequest extends FormRequest {
-    /** Crear: administrador y auditor. Editar una existente: solo el administrador. */
+ 
     public function authorize(): bool {
         $usuario = $this->user();
 
@@ -17,7 +17,7 @@ class MudanzaRequest extends FormRequest {
     }
 
     protected function prepareForValidation(): void {
-        // Los renglones que se dejaron vacíos en el formulario no cuentan.
+ 
         $this->merge([
             'movimientos' => collect((array) $this->input('movimientos', []))
                 ->map(fn ($m) => ['origen' => trim((string) ($m['origen'] ?? '')), 'destino' => trim((string) ($m['destino'] ?? ''))])

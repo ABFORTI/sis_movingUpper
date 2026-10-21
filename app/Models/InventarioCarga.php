@@ -6,10 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * Un Excel de inventario cargado para un almacén. Se conserva aunque se
- * reemplace (historial); solo una carga por almacén está vigente.
- */
+
 class InventarioCarga extends Model {
     protected $table = 'inventario_cargas';
 

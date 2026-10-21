@@ -33,7 +33,6 @@
   @endif
 
   @if ($sinPartida > 0)
-    {{-- Guardado por fuera del botón Guardar: sus N/S existen (Ver piezas) pero sin consecutivo (Corregir, Excel). --}}
     <form method="POST" action="{{ route('tarimas.partidas.completar', $tarima) }}" class="alert alert-danger" style="margin-bottom:16px;" role="alert" data-loading>
       @csrf
       <x-icon name="alert" />
@@ -75,7 +74,7 @@
           <p class="empty-text">Usa «Completar piezas» (arriba) para que aparezcan aquí y se puedan corregir.</p>
         </div>
       @elseif ($trasladadas->isNotEmpty())
-        {{-- No está vacío: sus piezas siguen en la mudanza, en otro embarque. --}}
+
         <div class="empty">
           <div class="empty-icon"><x-icon name="arrow-right" class="icon-xl" /></div>
           <p class="empty-title">Las piezas se movieron al {{ $trasladadas->count() === 1 ? 'embarque' : 'los embarques' }} {{ $trasladadas->join(', ', ' y ') }}</p>
@@ -318,7 +317,6 @@
 
 @push('scripts')
 <script>
-  // Editar N/S: al elegir la pieza se llenan su SKU y su N/S actuales.
   (function () {
     const form = document.querySelector('[data-editar-partida]');
     if (!form) return;
@@ -331,7 +329,6 @@
     if (pieza.value && !form.querySelector('[data-partida-ns]').value) pieza.dispatchEvent(new Event('change'));
   })();
 
-  // Agregar N/S: el campo SKU solo aparece con «Otro SKU».
   (function () {
     const form = document.querySelector('[data-agregar-partida]');
     if (!form) return;
@@ -346,7 +343,6 @@
     mostrar();
   })();
 
-  // «Es un SKU nuevo»: la descripción opcional solo se pide al marcarla.
   document.querySelectorAll('[data-alta-sku]').forEach(casilla => {
     const descripcion = casilla.closest('.field').querySelector('[data-alta-descripcion]');
     const mostrar = () => { descripcion.hidden = !casilla.checked; };
@@ -354,8 +350,7 @@
     mostrar();
   });
 
-  // Con el escáner: cada N/S leída (texto + Enter) marca su pieza y limpia el campo
-  // para la siguiente. El Enter nunca envía el formulario.
+
   (function () {
     const campo = document.querySelector('[data-marcar-escaneo]');
     if (!campo) return;
@@ -364,7 +359,6 @@
       e.preventDefault();
       const valor = campo.value.trim().toLowerCase();
       const visibles = Array.from(document.querySelectorAll('#tablaPartidas tbody tr')).filter(f => !f.hidden);
-      // "SN-1" también coincide con "SN-10": gana la N/S idéntica.
       const fila = visibles.length === 1
         ? visibles[0]
         : visibles.find(f => f.querySelector('td:nth-child(4)').textContent.trim().toLowerCase() === valor);

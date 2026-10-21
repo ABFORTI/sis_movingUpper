@@ -1,20 +1,11 @@
 /*
  * Captura en handheld.
  *
- * 1. Teclado: el escáner (DataWedge u otro, salida "teclado" + Enter) escribe
- *    sin necesitar el teclado en pantalla, que tapa media pantalla. En equipos
- *    táctiles los campos de escaneo lo ocultan (inputmode="none"); el botón de
- *    teclado lo muestra para escribir a mano y la preferencia se recuerda.
- * 2. N/S sin recargar: cada N/S va por fetch y la página se actualiza en su
- *    lugar. Si el gatillo dispara más rápido que la red, se encolan y se envían
- *    en orden. Sin JavaScript, el formulario funciona como siempre.
- *    El servidor valida cada N/S contra el inventario: si coincide se avisa con
- *    un modal breve que no detiene el escaneo; si no coincide, la cola se pausa
- *    y un modal pregunta si se marca como incidencia (solo "Sí" la registra).
- * 3. Aviso: sonido y vibración distintos para "guardado" y "rechazado", porque
- *    en el almacén no siempre se está mirando la pantalla.
- * 4. Foco: tocar fuera de un control regresa el foco al campo de escaneo.
- * 5. Gatillo = Enter: la lectura se envía sola aunque el escáner no mande Enter.
+ * 1. Teclado
+ * 2. N/S sin recargar
+ * 3. Aviso
+ * 4. Foco
+ * 5. Gatillo = Enter
  */
 (function () {
   'use strict';
@@ -42,8 +33,7 @@
     });
   }
 
-  // "Escribir a mano": la N/S sin código de barras legible se teclea en el mismo
-  // campo y pasa por las mismas validaciones que la escaneada.
+
   document.querySelectorAll('[data-captura-manual]').forEach(boton => {
     boton.addEventListener('click', () => {
       conTeclado = true;
@@ -59,7 +49,7 @@
       conTeclado = !conTeclado;
       almacen.guardar(CLAVE_TECLADO, conTeclado ? '1' : '0');
       aplicarTeclado();
-      // Volver a enfocar hace que Android muestre u oculte el teclado de inmediato.
+
       const campo = boton.closest('.control')?.querySelector('[data-escaneo]');
       if (campo && !campo.disabled) { campo.blur(); setTimeout(() => campo.focus(), 30); }
     });
@@ -90,21 +80,19 @@
   function vibrar(patron) { try { navigator.vibrate?.(patron); } catch (e) { /* sin vibración */ } }
   const aviso = {
     ok() { tono([1320], 0.07); vibrar(35); },
-    // Ya estaba registrado: no es error, pero se distingue del "guardado".
+
     repetido() { tono([880, 880], 0.06); vibrar([40, 60, 40]); },
     error() { tono([330, 220], 0.18); vibrar([180, 80, 180]); },
   };
-  // Para el andén (anden.js), que usa los mismos avisos.
+
   window.MovingUpperAviso = aviso;
 
-  // Escaneos que recargan la página (SKU): si volvió con error, avisa. El
-  // navegador puede bloquear el sonido hasta el primer toque; la vibración y el
-  // campo en rojo quedan siempre.
+
   if (document.querySelector('.flash .alert-danger')) aviso.error();
-  // Andén y recepción: el escaneo aceptado también suena (el operador no mira la pantalla).
+
   else if (document.querySelector('[data-escaneo][data-aviso-ok]') && document.querySelector('.flash .alert-success')) aviso.ok();
 
-  // "Editar números de serie" → Eliminar: confirma cuántas y cuáles N/S se quitan.
+
   document.querySelectorAll('[data-confirmar-eliminar]').forEach(boton => {
     boton.addEventListener('click', e => {
       const elegidas = Array.from(document.querySelectorAll(`input[name="ns[]"][form="${CSS.escape(boton.form.id)}"]:checked`))
@@ -121,7 +109,6 @@
 
   // ---------- 4. Foco ----------
   function campoPrincipal() {
-    // El selector de SKU (sin data-escaneo: se escribe para buscar) también puede ser el campo principal.
     return campos.find(c => !c.disabled && c.hasAttribute('autofocus'))
       || document.querySelector('[data-sku-input][autofocus]:not(:disabled)')
       || campos.find(c => !c.disabled);
@@ -131,7 +118,7 @@
     if (window.getSelection()?.toString()) return;
     campoPrincipal()?.focus({ preventScroll: true });
   });
-  // En el handheld, al llegar a la página el campo de escaneo queda centrado.
+
   if (tactil) campoPrincipal()?.scrollIntoView({ block: 'center' });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') campoPrincipal()?.focus({ preventScroll: true });
@@ -139,14 +126,9 @@
 
   // ---------- 5. Gatillo = Enter ----------
   // Una lectura del gatillo se envía sola, aunque el escáner no mande Enter
-  // (DataWedge sin "Send ENTER key", o con sufijo Tab). Se reconoce por la
-  // velocidad: el escáner escribe todo en ráfaga (o de golpe) y luego calla;
-  // una persona teclea mucho más lento. También aplica al SKU del WMS.
-  // Donde se escribe con el teclado en pantalla (⌨ activado, o el buscador de
-  // SKU) solo cuenta la ráfaga tecla por tecla: el texto predictivo y las
-  // sugerencias insertan palabras de golpe y no deben enviarse solos.
-  const RAFAGA_MS = 40;       // máximo entre caracteres de una lectura
-  const FIN_MS = 120;         // silencio que marca el fin de la lectura
+  // (DataWedge sin "Send ENTER key", o con sufijo Tab). 
+  const RAFAGA_MS = 40;  
+  const FIN_MS = 120;    
   const MIN_CARACTERES = 4;
 
   const lectores = [...campos, ...document.querySelectorAll('[data-sku-input]')];
@@ -155,12 +137,12 @@
     let ultimo = 0;
     let rafaga = 0;
     let reloj = null;
-    let enviadoHasta = 0;
+    let enviado = { valor: '', hasta: 0 };
 
     function enviar() {
       reloj = null;
       if (!campo.value.trim() || !campo.form || campo.disabled) return;
-      enviadoHasta = Date.now() + 400;
+      enviado = { valor: campo.value.trim(), hasta: performance.now() + 400 };
       rafaga = 0;
       if (typeof campo.form.requestSubmit === 'function') campo.form.requestSubmit();
       else campo.form.dispatchEvent(new Event('submit', { cancelable: true })) && campo.form.submit();
@@ -168,16 +150,15 @@
 
     campo.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
-        // El escáner sí mandó Enter: el envío normal se encarga.
         clearTimeout(reloj);
         reloj = null;
         rafaga = 0;
-        // Enter que llega justo después de un envío automático: es de la misma lectura.
-        if (Date.now() < enviadoHasta) e.preventDefault();
+        const valor = campo.value.trim();
+        if (performance.now() < enviado.hasta && (!valor || valor === enviado.valor)) e.preventDefault();
         return;
       }
       if (e.key === 'Tab' && rafaga >= MIN_CARACTERES && campo.value.trim()) {
-        e.preventDefault(); // sufijo Tab del escáner: no saltar de campo, enviar
+        e.preventDefault();
         clearTimeout(reloj);
         enviar();
       }
@@ -192,15 +173,13 @@
         return;
       }
       const ahora = performance.now();
-      // DataWedge puede escribir toda la lectura en un solo evento.
-      rafaga = agregados > 1 || ahora - ultimo <= RAFAGA_MS ? rafaga + agregados : agregados;
+      rafaga = agregados > 1 || ahora - ultimo <= RAFAGA_MS || reloj !== null ? rafaga + agregados : agregados;
       ultimo = ahora;
       clearTimeout(reloj);
       reloj = rafaga >= MIN_CARACTERES ? setTimeout(enviar, FIN_MS) : null;
     });
   });
 
-  // ---------- 2. N/S sin recargar ----------
   const form = document.querySelector('form[data-escaneo-ns]');
   const campoNs = form?.querySelector('[data-escaneo]');
   if (!form || !campoNs || !window.fetch) return;
@@ -211,7 +190,6 @@
   estado.setAttribute('aria-live', 'polite');
   estado.hidden = true;
   form.querySelector('.field').appendChild(estado);
-  // El error que vino del servidor en una recarga se reemplaza por el estado en vivo.
   const erroresViejos = form.querySelectorAll('[data-error-escaneo]');
 
   function mostrar(tipo, texto) {
@@ -226,7 +204,6 @@
   }
 
   function invalidarGuardado(uuid) {
-    // Una pieza nueva necesita su etiqueta antes de guardar el embarque (igual que en el servidor).
     try { sessionStorage.removeItem('tarima-impresa:' + uuid); } catch (e) { /* sin almacenamiento */ }
     document.querySelectorAll(`[data-guardar][data-uuid="${CSS.escape(uuid)}"]`).forEach(b => {
       b.disabled = true;
@@ -263,7 +240,6 @@
       chip.className = 'chip chip-nuevo';
       chip.dataset.ns = datos.numero_serie;
       if (datos.incidencia) {
-        // Sin coincidencia en el inventario: ⚠ + texto, no solo color.
         chip.className = 'chip chip-revision';
         chip.title = `Pendiente de revisión: no se encontró en el inventario (${datos.incidencia.folio})`;
         chip.textContent = '⚠ ' + datos.numero_serie;
@@ -276,11 +252,10 @@
         if (datos.coincidencia) chip.title = 'Coincidió en: ' + datos.coincidencia;
       }
       chips.appendChild(chip);
-      // Solo las últimas lecturas: el resto está en "Editar números de serie".
       const max = Number(chips.dataset.chipsMax) || 0;
       while (max && chips.children.length > max) chips.firstElementChild.remove();
     }
-    // La N/S nueva también aparece en "Editar números de serie" sin recargar.
+
     const lista = linea.querySelector('[data-anomalias-lista]');
     const plantilla = linea.querySelector('template[data-ns-plantilla]');
     if (lista && plantilla && datos.numero_serie_id) {
@@ -297,12 +272,12 @@
       fila.querySelector('summary')?.setAttribute('aria-label', `Editar la N/S ${datos.numero_serie}`);
       lista.appendChild(fila);
     } else if (!lista) {
-      sinTarjeta = true; // el modelo aún no estaba en la página: aparece al recargar
+      sinTarjeta = true; 
     }
     invalidarGuardado(datos.tarima);
   }
 
-  // ---------- Aviso breve del resultado de la validación (nunca modal) ----------
+
   const dialogo = document.getElementById('dlgSerie');
   const ui = dialogo && {
     icono: dialogo.querySelector('[data-serie-icono]'),
@@ -318,7 +293,6 @@
     campoNs.focus({ preventScroll: true });
   }
 
-  /** Coincidencia: aviso breve, no modal (el escáner puede seguir leyendo). */
   function avisarCoincidencia(datos) {
     if (!ui || typeof dialogo.show !== 'function') return;
     clearTimeout(cierreAutomatico);
@@ -333,8 +307,7 @@
     cierreAutomatico = setTimeout(cerrarDialogo, 1600);
   }
 
-  // La tarjeta del embarque no está en la página (p. ej. era la primera N/S y el
-  // embarque aún no tenía piezas): se recarga al terminar la cola.
+
   let sinTarjeta = false;
   const cola = [];
   let enviando = false;
@@ -371,8 +344,6 @@
     }
 
     if (respuesta.ok && datos?.estado === 'registrada') {
-      // Sin coincidencia en el inventario: ya viene registrada con su incidencia
-      // (la abrió el servidor). Solo se avisa y se señala; el escaneo sigue.
       reflejar(datos);
       mostrar(datos.incidencia ? 'aviso' : 'ok', datos.mensaje);
       if (datos.incidencia) aviso.repetido();
@@ -386,7 +357,6 @@
       return 'Este embarque ya no es tuyo o cambió.';
     }
     const texto = datos?.errors?.numero_serie?.[0] || datos?.message || `No se pudo guardar la N/S ${valor}.`;
-    // Sin SKU activo, embarque guardado o anulado, mudanza detenida: la pantalla está desfasada.
     if (/SKU activo|guardad[oa]|anulad[oa]|mudanza/i.test(texto)) recargar = true;
     return texto;
   }
@@ -394,8 +364,6 @@
   async function procesar() {
     if (enviando) return;
     enviando = true;
-    // Cada N/S se valida por separado: un rechazo no detiene las demás, pero su
-    // aviso se queda en pantalla aunque las siguientes se guarden.
     const rechazos = [];
     while (cola.length) {
       const motivo = await enviar(cola.shift());

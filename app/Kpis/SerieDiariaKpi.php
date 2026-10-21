@@ -8,20 +8,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
-/**
- * Plantilla de los KPIs de serie de tiempo con comparación contra el periodo anterior.
- *
- * Rendimiento: la base de datos agrega por día (GROUP BY DATE(...)) y PHP solo
- * suma esos renglones diarios en cubetas con agruparPorPeriodo(). Nunca se cargan
- * registros individuales: a lo más un renglón por día (o por día y SKU/tarima en
- * los KPIs con conteos distintos), dentro del rango pedido más el anterior.
- * DATE() se comporta igual en MySQL y SQLite, así que no hay SQL por motor.
- *
- * Periodo anterior de cada renglón: el mismo tramo de la cubeta inmediata anterior.
- * Una cubeta completa se compara contra la anterior completa (sep-2026 contra
- * ago-2026); una recortada, contra el mismo tramo (1–6 oct contra 1–6 sep). Con
- * agrupacion=total, contra el mismo número de días justo antes de fecha_inicio.
- */
+
 abstract class SerieDiariaKpi extends MovingUpperKpi {
     public const CAMPO_ANTERIOR = 'total_periodo_anterior';
     public const CAMPO_VARIACION = 'porcentaje_variacion';
@@ -30,16 +17,13 @@ abstract class SerieDiariaKpi extends MovingUpperKpi {
         return [Periodo::MES, Periodo::DIA, Periodo::SEMANA, Periodo::TRIMESTRE, Periodo::ANIO, Periodo::TOTAL];
     }
 
-    /** @return array<string, array{tipo: string, descripcion: string}> campos propios, sin los de comparación */
+    /** @return array<string, array{tipo: string, descripcion: string}> */
     abstract protected function camposPropios(): array;
 
-    /** Campo de camposPropios() que se compara contra el periodo anterior. */
+
     abstract protected function campoComparado(): string;
 
-    /**
-     * Agregados por día desde $desde (00:00) hasta el fin del periodo pedido.
-     * Cada fila trae `dia` (Y-m-d) y lo que valores() sabe sumar.
-     */
+
     abstract protected function diario(KpiQuery $consulta, CarbonImmutable $desde): Collection;
 
     /** @return array<string, mixed> valores de camposPropios() para un grupo de filas diarias */
@@ -88,11 +72,9 @@ abstract class SerieDiariaKpi extends MovingUpperKpi {
     }
 
     /**
-     * GROUP BY DATE($columna) [, $extra...] dentro de [$desde, fin del periodo].
-     * toBase() aplica los scopes (SoftDeletes) y evita hidratar modelos.
      *
-     * @param list<string> $agregados expresiones SQL con alias, p. ej. 'COUNT(*) as total'
-     * @param list<string> $extra     columnas adicionales de agrupación (p. ej. registros.sku)
+     * @param list<string> $agregados expresiones SQL con alias'
+     * @param list<string> $extra     columnas adicionales de agrupación
      */
     protected function agregarPorDia(Builder $query, string $columna, KpiQuery $consulta, CarbonImmutable $desde, array $agregados, array $extra = []): Collection {
         $fecha = 'DATE('.$query->getQuery()->getGrammar()->wrap($columna).')';
@@ -145,7 +127,7 @@ abstract class SerieDiariaKpi extends MovingUpperKpi {
         return [$desde, $hasta];
     }
 
-    /** Filas diarias cuyo día cae en [$desde, $hasta]. */
+    
     private function entre(Collection $porDia, CarbonImmutable $desde, CarbonImmutable $hasta): Collection {
         $filas = [];
         for ($dia = $desde; $dia->lte($hasta); $dia = $dia->addDay()) {

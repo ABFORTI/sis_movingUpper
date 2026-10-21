@@ -7,14 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use LogicException;
 
-/** Archivo que respalda algo (foto, PDF, correo, Excel). Con SHA-256; no se borra. */
+
 class Evidencia extends Model {
     public const UPDATED_AT = null;
 
-    /** Tamaño máximo por archivo. */
     public const TAMANO_MAXIMO_KB = 10240;
 
-    /** Extensiones aceptadas: fotos, PDF, hojas de cálculo, correos y texto. */
     public const EXTENSIONES = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'pdf', 'xlsx', 'xls', 'csv', 'eml', 'msg', 'txt'];
 
     protected $table = 'evidencias';
@@ -31,7 +29,7 @@ class Evidencia extends Model {
         'subida_by',
     ];
 
-    /** Reglas de validación para un campo de varios archivos llamado "archivos". */
+    
     public static function reglas(): array {
         return [
             'archivos' => ['nullable', 'array', 'max:10'],

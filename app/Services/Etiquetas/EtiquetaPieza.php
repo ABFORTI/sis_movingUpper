@@ -3,19 +3,6 @@
 namespace App\Services\Etiquetas;
 
 /**
- * Etiqueta de una pieza: solo modelo, número de embarque y código de barras de
- * su N/S. Se imprime una por pieza escaneada; ninguna representa al embarque
- * completo.
- *
- * Si el SKU se convirtió (catálogo de conversiones), el modelo es el SKU
- * convertido, en un tamaño máximo menor, y debajo va "SKU anterior: …"; el
- * resto de la etiqueta no se mueve.
- *
- * El código de barras es Code 128 (la misma simbología que ya leían las
- * handhelds en el andén) y codifica el N/S tal como quedó registrado: al
- * escanearlo se obtiene ese N/S, sin prefijos ni búsquedas adicionales. Debajo
- * va el mismo N/S en texto (línea de interpretación) por si hay que escribirlo
- * a mano.
  *
  *  75 mm × 50 mm (600 × 400 dots), mismo papel y orientación de siempre
  * ┌─────────────────────────────────────────────────┐ 0
@@ -32,7 +19,6 @@ class EtiquetaPieza {
     private const Y_MODELO = 2;
     private const Y_EMBARQUE = 13.5;
     private const MODELO_MAX = 8;
-    /** Con SKU convertido: el modelo baja a 5.25 mm para que quepa debajo el SKU anterior (10.5 a 13 mm). */
     private const MODELO_CONVERTIDO_MAX = 5.25;
     private const Y_SKU_ANTERIOR = 10.5;
     private const EMBARQUE_MAX = 7;
@@ -41,13 +27,10 @@ class EtiquetaPieza {
     private const ALTO_BARRAS = 17;
     private const TEXTO_NS_MAX = 3.5;
     private const TEXTO_NS_MIN = 2;
-
-    /** Zona blanca a cada lado del código (Code 128 pide al menos 10 módulos). */
     private const ZONA_BLANCA = 2.5;
 
     public function __construct(private readonly FormatoEtiqueta $formato) { }
 
-    /** Code 128 solo admite ASCII imprimible; con otros caracteres no se puede codificar fielmente. */
     public static function codificable(string $numeroSerie): bool {
         return $numeroSerie !== '' && preg_match('/^[\x20-\x7E]+$/', $numeroSerie) === 1;
     }
@@ -74,7 +57,6 @@ class EtiquetaPieza {
             $l->codigoBarras($yBarras, $numeroSerie, $altoBarras, null, $ancho - 2 * $mm(self::ZONA_BLANCA));
             $l->texto($x, $yTexto, $ancho, $altoTexto, $numeroSerie, 'C');
         } else {
-            // Sin código de barras posible: el N/S en grande para leerlo y escribirlo a mano.
             $l->texto($x, $yBarras, $ancho, $mm(self::ROTULO), 'N/S · SIN CÓDIGO DE BARRAS', 'C');
             $l->textoEnBloque($x, $yBarras + $mm(self::ROTULO + 1), $ancho, $numeroSerie, $mm(self::MODELO_MAX), $mm(self::TEXTO_NS_MIN), 'C');
         }

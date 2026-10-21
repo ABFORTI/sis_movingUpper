@@ -13,17 +13,13 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
-/**
- * Archivos que sirven como prueba (entregas al cliente y evidencias). Se guardan
- * en el disco privado "documentos" con nombre generado y su SHA-256; al
- * descargarlos se vuelve a calcular el hash para demostrar que no cambiaron.
- */
+
 class DocumentoService {
     public function disco(): Filesystem {
         return Storage::disk('documentos');
     }
 
-    /** Guarda contenido ya generado (p. ej. el Excel de una entrega). @return array{archivo: string, sha256: string, tamano: int} */
+    /** Guarda contenido ya generado. @return array{archivo: string, sha256: string, tamano: int} */
     public function guardarContenido(string $carpeta, string $extension, string $contenido): array {
         $archivo = trim($carpeta, '/').'/'.Str::uuid().'.'.$extension;
         $this->disco()->put($archivo, $contenido);
@@ -57,7 +53,7 @@ class DocumentoService {
         return $this->disco()->exists($archivo) && hash_equals($sha256, hash('sha256', $this->disco()->get($archivo)));
     }
 
-    /** Descarga solo si el archivo sigue siendo idéntico al registrado. */
+
     public function descargar(string $archivo, string $sha256, string $nombre, bool $enLinea = false): StreamedResponse {
         abort_unless($this->intacto($archivo, $sha256), 409, 'El archivo no coincide con su registro (falta o fue alterado). Avisa al administrador.');
 

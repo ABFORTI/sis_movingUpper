@@ -26,28 +26,19 @@ class TarimaService {
         private readonly IncidenciaService $incidencias,
     ) { }
 
-    /** Fila de `contadores` con el último número de tarima de la mudanza. */
+
     public static function claveNumeracion(Mudanza $mudanza): string {
         return "tarimas_mudanza_{$mudanza->id}";
     }
 
-    /** Fila de `contadores` con el último consecutivo de pieza (partida) de la mudanza. */
+
     public static function claveConsecutivo(Mudanza|int $mudanza): string {
         $id = $mudanza instanceof Mudanza ? $mudanza->id : $mudanza;
 
         return "consecutivo_mudanza_{$id}";
     }
 
-    /**
-     * Crea la tarima en la mudanza activa con el siguiente número de la mudanza.
-     * La numeración es una sola para todos los usuarios: el contador se bloquea
-     * (FOR UPDATE) y el índice único (mudanza_id, numero) es la segunda barrera.
-     * Un número entregado no se reutiliza: si la tarima sobra, se anula.
-     *
-     * La tarima pertenece a un movimiento de la mudanza (almacén origen →
-     * destino). Si la mudanza tiene uno solo se usa ese; si tiene varios hay que
-     * indicarlo, porque define contra qué inventario se validan sus piezas.
-     */
+
     public function crear(?User $usuario, ?int $movimientoId = null): Tarima {
         $mudanza = $this->mudanzaActiva->obtener();
 
@@ -89,10 +80,7 @@ class TarimaService {
         ]);
     }
 
-    /**
-     * Las tarimas existentes solo se imprimen, guardan y vacían mientras su
-     * mudanza esté activa o en cierre.
-     */
+
     private function asegurarMudanzaOperable(Tarima $tarima): void {
         $mudanza = $tarima->mudanza()->first();
 
@@ -103,16 +91,11 @@ class TarimaService {
         }
     }
 
-    /**
-     * Envía el contenido a la papelera (borrado lógico) para cualquier rol: lo
-     * capturado queda con quién y cuándo lo quitó, y las N/S se liberan para
-     * volver a escanearse.
-     */
+
     public function vaciar(Tarima $tarima, User $usuario): void {
         $this->asegurarMudanzaOperable($tarima);
 
-        // Piezas que llegaron movidas desde una tarima guardada ya son partidas
-        // entregadas: no se borran, se retiran (con motivo) desde Corregir.
+
         if (Partida::where('tarima_id', $tarima->id)->enTarima()->exists()) {
             throw ValidationException::withMessages([
                 'tarima' => "El {$tarima->nombre} tiene piezas ya registradas que se movieron desde otro embarque. Retíralas desde Corregir.",
@@ -139,11 +122,7 @@ class TarimaService {
         $tarima->unsetRelation('registros');
     }
 
-    /**
-     * Antes de registrar la impresión de etiquetas: el embarque no está anulado
-     * y, si sigue en captura, su mudanza todavía admite cambios. Un embarque ya
-     * guardado puede reimprimir etiquetas (p. ej. tras una corrección).
-     */
+
     public function asegurarImprimible(Tarima $tarima): void {
         abort_if($tarima->estaAnulada(), 422, "El {$tarima->nombre} está anulado.");
 
@@ -158,12 +137,6 @@ class TarimaService {
     }
 
     /**
-     * Pasa el embarque de temporal a guardado, cuando cada pieza con N/S ya
-     * tiene su etiqueta impresa (Tarima::listaParaGuardar): cada pieza se vuelve
-     * una partida con su consecutivo fijo. Es idempotente y atómico: la fila se
-     * bloquea (FOR UPDATE), así que dos solicitudes a la vez (doble clic, recarga,
-     * reintento) la guardan una sola vez, y el escaneo no puede agregar piezas
-     * mientras se cuenta el rango.
      *
      * @return bool true si se guardó ahora; false si ya estaba guardada.
      */
@@ -219,12 +192,7 @@ class TarimaService {
         return $guardadaAhora;
     }
 
-    /**
-     * Embarque adicional: si un embarque guardado se quedó sin piezas porque
-     * todas se movieron a un mismo embarque, pasa a llamarse como ése
-     * ("E-012" → "E-011_adicional"). Si vuelve a tener piezas, o sus piezas
-     * están en varios embarques, recupera su número.
-     */
+
     public function actualizarAdicional(Tarima $tarima, ?User $usuario = null): void {
         $destinos = $tarima->estaGuardada() && ! $tarima->estaAnulada() && ! $tarima->partidas()->exists()
             ? $tarima->traslados()->distinct()->pluck('tarima_destino_id')
@@ -239,14 +207,7 @@ class TarimaService {
         }
     }
 
-    /**
-     * N/S vivas de un embarque guardado que no tienen partida. Guardar crea la
-     * partida de cada pieza en la misma transacción, así que solo pasa si el
-     * embarque se marcó como guardado por fuera de guardar() (p. ej. editando
-     * la base de datos): entonces Corregir y el Excel (que leen partidas) lo
-     * ven vacío, mientras Ver piezas y la validación de N/S (que leen la
-     * captura) sí ven sus piezas.
-     */
+
     public function piezasSinPartida(Tarima $tarima): int {
         if (! $tarima->estaGuardada() || $tarima->estaAnulada()) {
             return 0;
@@ -257,13 +218,6 @@ class TarimaService {
     }
 
     /**
-     * Repara un embarque guardado al que le faltan partidas: hace lo que
-     * guardar() no llegó a hacer, con la misma lógica (materializarPartidas
-     * omite las piezas que ya tienen la suya). Las N/S, sus etiquetas y el
-     * resto del historial no se tocan; las piezas reciben los siguientes
-     * consecutivos de la mudanza (nunca se reutiliza uno). Si alguna etiqueta
-     * no está confirmada, el embarque queda con reimpresión pendiente, igual
-     * que tras una corrección, y no se carga al tráiler hasta confirmarla.
      *
      * @return int piezas a las que se les creó su partida
      */
@@ -304,11 +258,7 @@ class TarimaService {
         });
     }
 
-    /**
-     * Un SKU que se activó y no recibió ninguna N/S no es una pieza: no se
-     * convierte en partida (cada pieza se identifica por su N/S). Va a la
-     * papelera, igual que un SKU que se queda sin N/S al corregir.
-     */
+
     private function descartarSkusSinPiezas(Tarima $tarima, User $usuario): void {
         $vacios = $tarima->registros()->where('tipo', TipoRegistro::Padre)->doesntHave('numerosSerie')->pluck('id');
         if ($vacios->isNotEmpty()) {
@@ -318,21 +268,10 @@ class TarimaService {
     }
 
     /**
-     * Crea una partida por cada pieza de la tarima que aún no la tenga (las que
-     * llegaron movidas desde otra tarima ya traen la suya y conservan su número).
-     * Devuelve el primer consecutivo reservado.
-     */
-    /**
-     * Cada N/S marcada con daño o anomalía durante la captura abre su propia
-     * incidencia, ligada a su pieza y a quien la reportó. Va en la misma
-     * transacción del guardado: o quedan la tarima y sus incidencias, o nada.
-     * No bloquea el traslado (la pieza dañada también se muda); el supervisor
-     * la sigue desde Incidencias.
      *
      * @return int incidencias creadas
      */
     private function registrarAnomalias(Tarima $tarima, User $usuario): int {
-        // Una N/S que ya tiene su incidencia de daño no abre otra (completarPartidas puede pasar de nuevo).
         $marcadas = NumeroSerie::with('registro')
             ->whereHas('registro', fn ($q) => $q->where('tarima_id', $tarima->id))
             ->whereNotNull('anomalia_at')
@@ -393,32 +332,18 @@ class TarimaService {
         return $inicial;
     }
 
-    /**
-     * Reserva $cantidad consecutivos de la mudanza y devuelve el primero. Debe llamarse dentro de
-     * una transacción: el FOR UPDATE sobre la fila del contador hace que los
-     * guardados simultáneos esperen su turno y reciban rangos contiguos sin traslape.
-     */
+
     private function reservarConsecutivos(Tarima $tarima, int $cantidad): int {
-        // max() evita que un rango vacío repita el inicial de la siguiente tarima.
         return Contador::reservar(self::claveConsecutivo($tarima->mudanza_id), max(1, $cantidad));
     }
 
     /**
-     * Anular un embarque que sigue en captura lo elimina: nunca recibió
-     * consecutivos ni salió en un Excel. Su contenido se borra con él y queda
-     * descrito en la bitácora (quién, cuándo, por qué y qué N/S tenía); las
-     * incidencias que abrió su captura conservan su texto y se resuelven.
-     *
-     * Su número solo vuelve a usarse si es el último asignado en la mudanza
-     * (Contador::liberarUltimo); si ya hay embarques posteriores queda el hueco:
-     * no se renumera ningún embarque ni se repite un número.
      *
      * @return bool true si su número se asignará al siguiente embarque
      */
     public function eliminar(Tarima $tarima, User $usuario, string $motivo): bool {
         $this->asegurarAnulable($tarima);
 
-        // Piezas movidas desde un embarque guardado ya tienen consecutivo: no se borran.
         if (Partida::where('tarima_id', $tarima->id)->exists()) {
             throw ValidationException::withMessages([
                 'motivo' => "El {$tarima->nombre} tiene piezas ya registradas que llegaron desde otro embarque: no se puede eliminar. Retíralas o muévelas desde Corregir.",
@@ -441,7 +366,7 @@ class TarimaService {
                         "Se eliminó el {$actual->nombre} (anulado en captura) con la N/S {$serie->numero_serie}.", $usuario);
                 }
             }
-            // Las incidencias conservan SKU, N/S y embarque en su texto; solo se suelta la liga.
+
             Incidencia::where('tarima_id', $actual->id)->update(['tarima_id' => null]);
             Incidencia::whereIn('numero_serie_id', $series->modelKeys())->update(['numero_serie_id' => null]);
 
@@ -456,7 +381,7 @@ class TarimaService {
                 'numero_reutilizable' => $reutiliza,
             ], $motivo);
 
-            // Registros, N/S e impresiones se van con el embarque (cascada).
+
             $actual->delete();
 
             return $reutiliza;
@@ -473,9 +398,6 @@ class TarimaService {
     }
 
     /**
-     * Anulación de un embarque ya guardado: conserva su número, su contenido y
-     * sus consecutivos (que no se reutilizan), sale de los Excel, y queda
-     * registrado quién lo anuló, cuándo y por qué.
      *
      * @return bool true si se anuló ahora; false si ya estaba anulada.
      */
@@ -515,7 +437,6 @@ class TarimaService {
     }
 
     /**
-     * Aplana la tarima a una fila por pieza.
      *
      * @return Collection<int, array{sku: string, sku_original: ?string, ns: string, descripcion: string, fecha: string, hora: string, registrado: string, tipo: string, registro_id: int, numero_serie_id: ?int, destino_id: ?int, descripcion_original: ?string, pendiente_revision: bool}>
      */
@@ -557,11 +478,7 @@ class TarimaService {
         })->values();
     }
 
-    /**
-     * Lo que la etiqueta y las consultas muestran como "Destino": el almacén
-     * destino del movimiento de la tarima. Las tarimas anteriores a los
-     * movimientos conservan la categoría con la que se capturaron.
-     */
+
     public function destino(Tarima $tarima): string {
         $tarima->cargarDetalle();
 

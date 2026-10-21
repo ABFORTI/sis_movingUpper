@@ -2,23 +2,7 @@
 
 Etiqueta física **horizontal de 75 × 50 mm** (75 mm de ancho, 50 mm de alto) impresa por **Bluetooth** desde computadora, celular Android o handheld, con la aplicación alojada en **Hostinger**.
 
----
 
-## 1. Diagnóstico (cómo funcionaba antes)
-
-| Pieza | Antes |
-|---|---|
-| Diseño | Dos diseños distintos: ZPL para 4"×6" (812×1218 dots) en `EtiquetaQrZpl` / `EtiquetaTablaZpl`, y una tarjeta HTML/CSS aparte para la vista previa. Podían no coincidir. |
-| QR | URL firmada `https://<dominio>/t/{uuid}?signature=…` (`TarimaService::urlDetalle`, ruta `tarimas.publico`). |
-| Envío | `zebra.js` enviaba el ZPL a **Zebra Browser Print** (`https://localhost:9101`). Sin alternativa si Browser Print no estaba. |
-| Bluetooth en PC | El README decía que Browser Print en Windows usaba Bluetooth: **era incorrecto** (ver §2). |
-| Errores | Se mostraban mensajes técnicos al usuario y no se registraban. |
-
-Datos: tarimas en `tarimas`, SKU en `registros`, números de serie en `numeros_serie`. El SKU y la N/S se capturan en formularios web; el handheld los escribe como teclado.
-
----
-
-## 2. Restricciones verificadas
 
 ### Zebra ZQ620 (hoja técnica oficial ZQ600 Series)
 
@@ -231,81 +215,9 @@ No hace falta emparejarla en *Configuración de Windows*: Web Bluetooth usa su p
 - La marca "impresa" de cada pieza (que habilita *Guardar* cuando no falta ninguna) se registra **solo cuando el usuario confirma** que las etiquetas físicas salieron bien.
 - El endpoint de diagnóstico exige sesión, valida longitudes y tiene límite de 30 solicitudes por minuto.
 
----
 
-## 8. Pruebas en campo
 
-| # | Prueba | Resultado esperado |
-|---|---|---|
-| 1 | Imprimir las etiquetas de un embarque con 3 piezas desde Windows + Chrome (BLE) | Selector → ZQ620 → **3 etiquetas** de 75×50 mm, sin cortes, cada una con su modelo, el número de embarque y su código de barras |
-| 2 | Lo mismo desde Android con Browser Print | Imprime sin selector, usando la impresora predeterminada |
-| 3 | Desde handheld: escanear una N/S, imprimir su etiqueta, volver y escanear otra | Solo sale la etiqueta de la pieza nueva; el contador «sin imprimir» baja a 0 |
-| 4 | Medir la etiqueta impresa | 75 × 50 mm; nada a menos de 3.5 mm de los lados ni de 2 mm arriba/abajo |
-| 5 | Leer el código de barras de cada etiqueta con la handheld (en un campo de texto y en Tráileres → Cargar) | Se escribe **exactamente** la N/S de la pieza; en el andén carga esa pieza |
-| 6 | N/S larga (20+ caracteres) y N/S con guiones o ceros a la izquierda | Se lee igual que la registrada, sin perder ceros ni guiones |
-| 7 | Modelo de 30 caracteres | Se reduce la fuente o se recorta con "…"; nada sale del área |
-| 8 | Reimprimir una sola pieza desde Etiquetas → «Reimprimir una pieza» | Sale solo esa etiqueta, idéntica a la anterior |
-| 9 | Caracteres especiales en modelo/N/S (`Ñ`, `é`, `^`, `~`, `\`) | Se imprimen literalmente; no se corta el formato; una N/S con `Ñ` sale en texto, sin código de barras |
-| 10 | Imprimir dos veces seguidas por BLE | La segunda no vuelve a pedir la impresora (misma página) |
-| 11 | Apagar la impresora y presionar Imprimir | Mensaje: no se pudo conectar…; registro en `impresion-*.log` |
-| 12 | Alejarse fuera de alcance durante el envío | Mensaje de conexión; al volver, **Imprimir** reconecta |
-| 13 | Encender de nuevo y reintentar | Imprime sin recargar la página |
-| 14 | Cancelar el selector Bluetooth | "No se seleccionó ninguna impresora" |
-| 15 | Browser Print cerrado en Android | Cae a Web Bluetooth (selector); si no hay BLE, mensaje de impresora no encontrada |
-| 16 | Abrir la etiqueta en iPhone | Mensaje de dispositivo no compatible |
-| 17 | Responder "No, imprimir de nuevo" | No se registra la impresión; *Guardar* sigue deshabilitado |
-| 18 | Responder "Sí, se imprimió bien" | Si ya no falta ninguna pieza, *Guardar* se habilita en la vista de escaneo; si faltan, dice cuántas |
-| 19 | Papel agotado | La etiqueta no sale; el usuario responde "No" y no se registra |
-| 20 | Otro sitio web intenta imprimir con Browser Print | Browser Print lo bloquea hasta que se acepte |
-
-Pruebas automatizadas: `php artisan test` (`tests/Feature/EtiquetaZq620Test.php` valida 400×600 dots, una etiqueta por pieza, que solo lleve modelo, número de embarque y código de barras de la N/S exacta, que nada salga del área ni se encime, el escape de caracteres y el diagnóstico; `EmbarquePorPiezaTest` y `EtiquetaYExportacionTest`, el flujo de impresión por pieza).
-
----
-
-## 9. Diagnóstico de campo (2026-10-12): selector que se congela y etiqueta cortada
-
-Se reportaron dos fallas **solo en celular y handheld** (en computadora todo sale bien). Tienen causas distintas.
-
-### 9.1 «Aparece la lista de impresoras pero no deja elegir»
-
-| Causa encontrada en el código | Efecto | Corrección |
-|---|---|---|
-| El selector (`requestDevice`) se abría **después** de esperar la búsqueda de Browser Print (hasta 2 s) y `getDevices()`. Chrome solo permite abrir el selector durante unos segundos tras un toque. | Con red o equipo lentos, el selector fallaba o quedaba en un estado inconsistente. | Browser Print se busca **al cargar la página**; el selector se abre en la primera línea del toque, sin esperas antes. Elegir impresora es un botón aparte («Elegir impresora Bluetooth»). |
-| Al vencer el tiempo de `gatt.connect()` la pantalla decía «sin respuesta», pero la conexión **seguía pendiente** en Chrome. | El siguiente intento se encolaba detrás del anterior: la interfaz parecía congelada. | Al vencer el tiempo o al tocar **Cancelar** se llama a `gatt.disconnect()`, que aborta la conexión pendiente. |
-| «Buscar impresora» e «Imprimir» podían correr a la vez. | Dos selectores o dos conexiones simultáneas. | Una sola operación a la vez; todos los botones se bloquean y aparece una barra de progreso con **Cancelar**. |
-| Errores del selector sin distinguir. | Mensaje genérico. | Mensajes por causa: selector cancelado, Bluetooth apagado, selector bloqueado por el navegador, sin soporte, tiempo agotado. |
-
-Causas del **equipo** que el código no puede corregir y hay que revisar en el handheld:
-
-- **Permisos de Chrome**: Android 12+ pide *Dispositivos cercanos*; Android 11 o anterior pide *Ubicación* **y** tener la ubicación del sistema encendida para buscar BLE. Sin ellos la lista sale vacía o no responde.
-- **Otra app conectada**: si Printer Setup Utility, Browser Print u otra app tiene abierta la conexión con la ZQ620, Chrome no puede conectarse. Cerrarla.
-- **BLE apagado en la impresora**: `bluetooth.le.controller_mode` debe ser `both` o `le`.
-- **[VERIFICAR EN EQUIPO]** El modelo informado «TC720L» no aparece en la documentación pública de Zebra consultada (sí TC72/TC77). Confirmar el modelo y la versión de Android en *Ajustes → Acerca del teléfono* y la versión de Chrome en *chrome://version*.
-
-### 9.2 «Imprimió solo un tercio de la etiqueta y empezó muy abajo»
-
-| Causa posible | Cómo se reconoce | Corrección |
-|---|---|---|
-| **Papel sin calibrar o con un largo guardado distinto** (otro rollo u otra app dejó `^LL`, `^LT` o modo continuo). La impresora no sabe dónde empieza la etiqueta y arranca a la mitad. | Contenido corrido hacia abajo, cortado o repartido en dos etiquetas. | Cada etiqueta ahora fija `^MTD ^MNY ^PW576 ^LL400 ^LH0,0 ^LT0 ^LS0`. Además: **Calibrar papel** en `/impresion/prueba` (o en Printer Setup). |
-| **Impresión con el navegador en Android** («Imprimir con el navegador»): pasa por el servicio de impresión de Android, que impone su tamaño de hoja (carta/A4 o 4×6") y escala la página. | Etiqueta pequeña, corrida o cortada; en computadora con controlador Zebra sale bien. | En Android ese botón ahora advierte antes de imprimir. La impresión del navegador se rehízo: copia solo la etiqueta directo del `<body>` (antes el resto de la página, oculto con `visibility:hidden`, seguía ocupando lugar y empujaba la etiqueta hacia abajo). |
-| **Envío BLE cortado a la mitad** y reintento: la impresora tenía medio formato en memoria y lo mezcló con el siguiente. | Etiqueta parcial tras un error de conexión. | Si un envío se corta, el siguiente empieza con `~JA` (borra lo incompleto). Progreso visible durante el envío. |
-
-No se cambió el tamaño de la etiqueta: sigue siendo **75 × 50 mm, 203 dpi, cabezal de 72 mm (576 × 400 dots)**, verificado en `config/etiquetas.php` y `.env`.
-
-### 9.3 Etiqueta de prueba
-
-`/impresion/prueba` imprime un marco exactamente en el borde del área imprimible, «ARRIBA» y «ABAJO», una regla cada 5 mm, texto pequeño, código de barras y QR. Al revisarla:
-
-1. Los **cuatro bordes** completos → el papel está bien calibrado.
-2. «ARRIBA» pegado al borde superior → el origen es correcto.
-3. Una sola etiqueta, sin pasar a la siguiente → el largo coincide.
-4. Se lee el texto pequeño y se escanean el código de barras y el QR → legibilidad correcta.
-
-Si después de calibrar la etiqueta sale completa pero un poco alta o baja, se ajusta `ZEBRA_AJUSTE_SUPERIOR_MM` en `.env` (negativo sube, positivo baja; máximo ±15 mm).
-
----
-
-## 10. Impresora registrada por MAC (2026-10-12)
+## 8. Impresora registrada por MAC (2026-10-12)
 
 Tabla `impresoras` (nombre, **MAC** única normalizada `AA:BB:CC:DD:EE:FF`, nombre Bluetooth, ubicación, activa), administrada en **Admin → Impresoras**. Cada equipo elige la suya en el panel de impresión y se recuerda en el navegador de ese equipo (`localStorage`).
 
@@ -318,17 +230,3 @@ Tabla `impresoras` (nombre, **MAC** única normalizada `AA:BB:CC:DD:EE:FF`, nomb
 
 Según el foro de desarrolladores de Zebra, Browser Print para Android solo usa Bluetooth Clásico; la impresora necesita `bluetooth.enable` y `bluetooth.discoverable` en `on`, y `bluetooth.le.controller_mode` en `both` o `classic`.
 
----
-
-## Fuentes
-
-- [Zebra Developer Portal — ZD420 no aparece en Browser Print Android por Bluetooth (ajustes bluetooth.*)](https://developer.zebra.com/forum/25994)
-
-- [Zebra ZQ600 Series — hoja técnica](https://www.zebra.com/content/dam/zebra_dam/en/spec-sheets/zq610-zq620-zq630-spec-sheet-en-us.pdf)
-- [Zebra Browser Print — soporte](https://www.zebra.com/us/en/support-downloads/software/printer-software/browser-print.html)
-- [Browser Print Android User Guide](https://www.zebra.com/content/dam/zebra_new_ia/en-us/solutions-verticals/product/Software/Printer%20Software/Link-OS/browser-print/zebra-browser-print-user-guide-v1-3-android-en-us.pdf)
-- [Link-OS Bluetooth Low Energy AppNote](https://www.zebra.com/content/dam/support-dam/en/documentation/unrestricted/application-notes/AppNote-BlueToothLE-v4.pdf)
-- [Zebra Developer Portal — ZQ620 y Web Bluetooth en Chrome](https://developer.zebra.com/content/zq620-do-not-bluetooth-connection-chrome-javascript)
-- [Web Bluetooth — estado de implementación](https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md)
-- [MDN — Web Bluetooth API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API)
-- [Zebra PrintConnect](https://www.zebra.com/us/en/products/software/barcode-printers/link-os/print-connect.html)

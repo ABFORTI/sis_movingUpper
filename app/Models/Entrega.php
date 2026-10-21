@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
-/** Un Excel de inventario entregado al cliente (Reporte Diario: el trabajo de un día). Inmutable. */
+
 class Entrega extends Model {
     public const UPDATED_AT = null;
 
@@ -54,7 +54,7 @@ class Entrega extends Model {
         return $this->hasMany(EntregaPartida::class)->orderBy('consecutivo');
     }
 
-    /** "MUD-0001_Reporte_Diario_2026-10-19_v3.xlsx"; las entregas anteriores (mudanza completa): "MUD-0001_Entrega_v3.xlsx". */
+    /** "MUD-0001_Reporte_Diario_2026-10-19_v3.xlsx"*/
     public function getNombreArchivoAttribute(): string {
         return $this->fecha
             ? "{$this->mudanza->folio}_Reporte_Diario_{$this->fecha->format('Y-m-d')}_v{$this->version}.xlsx"

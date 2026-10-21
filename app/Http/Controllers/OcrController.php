@@ -8,14 +8,7 @@ use App\Support\SkuActivo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/**
- * "Foto del N/S": lee la etiqueta y propone el SKU/modelo y la N/S.
- *
- * No guarda nada (ni la foto): el SKU se elige en el selector y la N/S se
- * confirma con "Agregar N/S", así que pasan por las mismas validaciones,
- * coincidencia con el inventario, incidencias y control de repetidas que una
- * lectura escaneada. Funciona con o sin SKU activo.
- */
+
 class OcrController extends Controller {
     public function analizar(Request $request, GeminiOcrService $gemini, SkuActivo $skuActivo): JsonResponse {
         $request->validate([
@@ -40,10 +33,8 @@ class OcrController extends Controller {
         $ns = $lectura['numero_serie'];
         $registroActivo = $skuActivo->obtener();
         $activo = $registroActivo?->sku;
-        // Un SKU convertido sigue impreso con su código anterior en la etiqueta del producto.
         $original = $registroActivo?->sku_original;
 
-        // La N/S nunca puede ser el código del producto: si coinciden, la lectura los confundió.
         if ($ns !== null && ($mismo($ns, $lectura['sku']) || $mismo($ns, $lectura['modelo']) || $mismo($ns, $activo) || $mismo($ns, $original))) {
             $avisos[] = "«{$ns}» parece el SKU o modelo, no la N/S. Escribe la N/S a mano.";
             $ns = null;

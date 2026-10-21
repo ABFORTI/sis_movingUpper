@@ -19,23 +19,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Throwable;
 
-/**
- * Lee el Excel de inventario de UN almacén y lo deja como su inventario vigente.
- *
- * - Las columnas se reconocen por su encabezado (config/inventarios.php), no por
- *   posición. Sin la columna SKU o sin ninguna de las tres de serie, se rechaza
- *   el archivo completo.
- * - Si el archivo trae una columna de almacén y algún valor no es el almacén
- *   elegido, se rechaza completo: así no se carga el inventario de un almacén
- *   en otro por error.
- * - Fila sin SKU o sin ningún número de serie, o con textos demasiado largos:
- *   se omite y se reporta. Fila idéntica a otra: se importa una vez y se avisa.
- *   Un número de serie (fabricante o N/S) repetido en filas distintas se
- *   importa y se avisa, porque requiere revisión. El lote puede repetirse
- *   (varias piezas de un mismo lote) y no se avisa.
- * - Todo va en una transacción: o queda la carga nueva completa como vigente
- *   (y la anterior como histórica), o no cambia nada.
- */
+
 class ImportadorInventario {
     private const LIMITES = ['sku' => 100, 'modelo' => 150, 'descripcion' => 255, 'posicion' => 100, 'ns_fabricante' => 150, 'numero_serie' => 150, 'ns_lote' => 150];
     private const MAX_MENSAJES = 200;
@@ -69,7 +53,6 @@ class ImportadorInventario {
 
         try {
             return DB::transaction(function () use ($almacen, $archivo, $usuario, $lectura, $guardado) {
-                // Dos cargas simultáneas del mismo almacén se forman en fila.
                 Almacen::whereKey($almacen->id)->lockForUpdate()->first();
 
                 $anterior = InventarioCarga::where('almacen_id', $almacen->id)->where('vigente', true)->lockForUpdate()->first();
@@ -241,8 +224,6 @@ class ImportadorInventario {
     }
 
     /**
-     * Busca la fila de encabezados en las primeras filas: la primera que tenga
-     * la columna SKU y al menos una de número de serie.
      *
      * @return array{0: int, 1: array<string, string>} fila y campo => letra de columna
      */

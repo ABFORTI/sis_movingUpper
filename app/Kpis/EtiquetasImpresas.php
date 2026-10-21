@@ -7,12 +7,7 @@ use App\Models\Impresion;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
-/**
- * Impresiones confirmadas por el usuario (tabla impresiones, por created_at). Un
- * envío que el usuario no confirma ("No, imprimir de nuevo") no queda registrado.
- * Las filas anteriores a la bitácora vienen de tarimas.impresa_at y no tienen
- * número de etiquetas: se reportan en total_impresiones_sin_conteo.
- */
+
 class EtiquetasImpresas extends SerieDiariaKpi {
     public function clave(): string { return 'etiquetas-impresas'; }
     public function nombre(): string { return 'Etiquetas impresas'; }

@@ -6,11 +6,7 @@ use App\Models\Tarima;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-/**
- * SKU elegido en el selector. Que exista en el inventario del almacén de la
- * tarima lo valida EscaneoService (no se confía en las opciones del navegador);
- * la descripción sale del inventario, por eso no se recibe.
- */
+
 class RegistrarSkuRequest extends FormRequest {
     public function authorize(): bool {
         $tarima = Tarima::where('uuid', (string) $this->input('tarima'))->first();

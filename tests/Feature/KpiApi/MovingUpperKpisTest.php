@@ -21,7 +21,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
-/** Valores concretos de cada KPI de MovingUpper (docs/kpi-api/sistemas/movingupper.md). */
+
 class MovingUpperKpisTest extends TestCase {
     use RefreshDatabase;
 

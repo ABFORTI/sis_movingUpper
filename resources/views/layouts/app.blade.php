@@ -63,7 +63,6 @@
       @yield('content')
 
       @auth
-        {{-- Motivo de anular, suspender, cancelar…: lo usan los formularios con data-motivo (ui.js). --}}
         <dialog id="dlgMotivo" class="dialog" aria-labelledby="dlgMotivoTitulo">
           <form method="dialog">
             <h2 class="dialog-title" id="dlgMotivoTitulo" data-titulo></h2>

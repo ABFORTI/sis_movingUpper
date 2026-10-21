@@ -53,7 +53,7 @@
           <p class="hint">{{ $escaneo['ayuda'] }}</p>
         </div>
 
-        {{-- Resultado del último escaneo: texto + icono + color, legible a un brazo de distancia. --}}
+
         <div class="anden-estado" data-anden-estado role="status" aria-live="assertive" hidden>
           <span class="anden-estado-icono" data-icono aria-hidden="true"></span>
           <div style="min-width:0;">
@@ -135,7 +135,9 @@
         </div>
         <div class="field">
           <label for="chofer" class="label">Chofer</label>
-          <input id="chofer" name="chofer" value="{{ old('chofer', $embarque->chofer) }}" maxlength="150" class="input">
+          <input id="chofer" name="chofer" value="{{ old('chofer', $embarque->chofer) }}" maxlength="150" class="input"
+                 autocomplete="off" @if (! empty($sugerencias['chofer'])) list="sug-chofer" @endif>
+          @include('embarques.partials.sugerencias', ['id' => 'sug-chofer', 'valores' => $sugerencias['chofer'] ?? []])
         </div>
         @error('salida') <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
         <button type="submit" class="btn btn-primary btn-block" style="margin-top:12px;">

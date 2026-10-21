@@ -1,28 +1,4 @@
-/*
- * Impresión en Zebra (ZQ620) desde la página de la etiqueta o la de prueba.
- *
- * Dos caminos, en este orden:
- * 1. Zebra Browser Print (app oficial). La página le habla en localhost; la app
- *    usa el emparejamiento Bluetooth normal de Android y recuerda la impresora.
- * 2. Web Bluetooth (BLE) de Chrome, sin instalar nada. Pide elegir la impresora
- *    en el selector del navegador.
- *
- * Por qué está hecho así (causas de "la lista aparece y no deja elegir"):
- * - Chrome solo abre el selector de Bluetooth durante unos segundos después de
- *   un toque (activación de usuario). Antes se esperaba la búsqueda de Browser
- *   Print y getDevices() y luego se abría el selector: con red lenta el permiso
- *   ya había vencido. Ahora Browser Print se detecta al cargar la página y el
- *   selector se abre en el mismo toque, antes de cualquier espera.
- * - Una conexión GATT que no responde se quedaba pendiente aunque la pantalla
- *   dijera "tiempo agotado"; el siguiente intento se encolaba detrás y todo
- *   parecía congelado. Ahora, al vencer el tiempo o al cancelar, se llama a
- *   gatt.disconnect(), que aborta la conexión pendiente.
- * - Solo hay una operación a la vez (imprimir, elegir, calibrar) y siempre con
- *   progreso visible y botón Cancelar.
- * - Si un envío se corta a la mitad, la impresora queda con una etiqueta a
- *   medias en su memoria; el siguiente envío empieza con ~JA (borra el formato
- *   incompleto) para que no se mezclen.
- */
+
 (function () {
   'use strict';
 
@@ -117,7 +93,7 @@
     return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
 
-  // ---------- Una operación a la vez ----------
+
   let operacion = null;
   const botones = () => [btn, btnElegir, btnBuscar, btnOlvidar, btnCalibrar, btnNavegador].filter(Boolean);
 
@@ -145,11 +121,7 @@
     barra.value = Math.round(fraccion * 100);
   }
 
-  // ---------- Impresora de este equipo (por MAC) ----------
-  // La elige el operador de las registradas por un admin y se recuerda en el
-  // equipo. Una página web no puede conectarse a una MAC: la MAC se usa para
-  // encontrar la impresora entre las que ve Zebra Browser Print, que sí usa el
-  // emparejamiento Bluetooth Clásico de Android.
+
   const selectorEquipo = $('impresoraEquipo');
   const CLAVE_EQUIPO = 'impresora-mac';
 
@@ -158,7 +130,7 @@
     return hex.length === 12 ? hex.match(/../g).join(':') : null;
   }
 
-  /** MAC que aparezca en el objeto de Browser Print (uid, address, nombre…), sin suponer el campo. */
+
   function macDe(dispositivo) {
     const m = JSON.stringify(dispositivo || {}).match(/(?<![0-9a-f])(?:[0-9a-f]{2}[:-]?){5}[0-9a-f]{2}(?![0-9a-f])/i);
     return m ? normalizarMac(m[0]) : null;
@@ -182,8 +154,8 @@
   const BrowserPrint = {
     base: location.protocol === 'https:' ? 'https://localhost:9101/' : 'http://localhost:9100/',
     CONEXIONES: { bluetooth: 'Bluetooth', usb: 'USB', network: 'red', driver: 'controlador' },
-    activo: undefined,      // undefined = buscando · false = no responde · true = responde
-    lista: [],              // impresoras que Browser Print conoce
+    activo: undefined, 
+    lista: [],  
     predeterminada: null,
     busqueda: null,
 
@@ -199,7 +171,6 @@
         let respondio = false;
         const intentar = ruta => this.pedir(ruta).then(d => { respondio = true; return d; }).catch(() => null);
         const [disponibles, predeterminada] = await Promise.all([intentar('available'), intentar('default?type=printer')]);
-        // "available" puede venir como lista o como { printer: [...], ... }.
         const todas = Array.isArray(disponibles) ? disponibles
           : Object.values(disponibles || {}).flat().filter(d => d && typeof d === 'object');
         this.lista = todas.filter(d => !d.deviceType || d.deviceType === 'printer');
@@ -210,11 +181,7 @@
       return this.busqueda;
     },
 
-    /**
-     * Dispositivo de Browser Print para imprimir. Con impresora del equipo, el
-     * que tenga su MAC (exacto); si Browser Print no la lista, se intenta con
-     * un dispositivo armado con la MAC (no exacto: puede rechazarlo).
-     */
+
     destino() {
       if (!this.activo) return null;
       const conocidas = [...this.lista, this.predeterminada].filter(Boolean);
@@ -241,9 +208,8 @@
     conexion(d) { return this.CONEXIONES[d?.connection] || d?.connection || ''; },
   };
 
-  // ---------- Web Bluetooth (BLE) ----------
+
   const Ble = {
-    // Servicio "Zebra Parser" de las impresoras Link-OS con BLE y su característica de escritura.
     SERVICIO: '38eb4a80-c570-11e3-9507-0002a5d5c51b',
     ESCRITURA: '38eb4a82-c570-11e3-9507-0002a5d5c51b',
     TROZO: 180,
@@ -251,7 +217,7 @@
     dispositivo: null,
     caracteristica: null,
     cancelado: false,
-    incompleto: false, // el último envío se cortó a la mitad
+    incompleto: false,
 
     soportado() { return window.isSecureContext && 'bluetooth' in navigator; },
 
@@ -266,10 +232,8 @@
       return this.dispositivo;
     },
 
-    /** Abre el selector. Debe llamarse en el mismo toque, sin esperas antes. */
+
     elegir() {
-      // Con nombre Bluetooth registrado, la lista muestra solo esa impresora
-      // (Chrome no expone la MAC, así que no se puede filtrar por ella).
       const filtro = equipo.nombreBluetooth
         ? { filters: [{ name: equipo.nombreBluetooth }], optionalServices: [this.SERVICIO] }
         : { acceptAllDevices: true, optionalServices: [this.SERVICIO] };
@@ -292,8 +256,6 @@
     async conectar() {
       if (this.conectado()) return;
       const d = this.dispositivo;
-      // Al vencer, disconnect() aborta la conexión pendiente (si no, Chrome la deja
-      // viva y bloquea los siguientes intentos).
       const servidor = await conTiempo(d.gatt.connect(), 12000, () => d.gatt.disconnect());
       if (this.cancelado) throw error('AbortError');
       const servicio = await conTiempo(servidor.getPrimaryService(this.SERVICIO), 8000, () => d.gatt.disconnect());
@@ -306,7 +268,6 @@
         await this.conectar();
       } catch (e) {
         if (e.name === 'AbortError' || this.cancelado) throw error('AbortError');
-        // Un reintento limpio: a veces la primera conexión tras encender falla.
         this.desconectar();
         await this.conectar();
       }
@@ -402,10 +363,7 @@
     return r.text();
   }
 
-  /**
-   * Envía el ZPL de `url` a la impresora disponible. El selector de Bluetooth,
-   * si hace falta, se abre en la primera línea (dentro del toque).
-   */
+
   async function enviarA(url, nombreOperacion) {
     if (operacion) return false;
     if (esIos() && !Ble.soportado()) {
@@ -414,11 +372,11 @@
       return false;
     }
 
-    // Selector de Chrome solo si ya se sabe que Browser Print no sirve.
+
     const abrirSelector = BrowserPrint.activo !== undefined && !BrowserPrint.destino() && !Ble.dispositivo && Ble.soportado();
-    const seleccion = abrirSelector ? Ble.elegir() : null; // ← sin ningún await antes
+    const seleccion = abrirSelector ? Ble.elegir() : null;
     const zpl = obtenerZpl(url);
-    zpl.catch(() => {}); // se maneja abajo
+    zpl.catch(() => {}); 
 
     ocupar(nombreOperacion, { cancelable: true });
     panelVerificar.hidden = true;
@@ -437,8 +395,6 @@
       } else if (Ble.dispositivo) {
         metodo = 'bluetooth';
       } else if (Ble.soportado()) {
-        // Browser Print terminó de buscar después del toque: el selector ya no
-        // se puede abrir aquí. Se pide un toque más.
         liberar();
         mostrar('Browser Print no responde. Ábrelo en este equipo, o toca «Conectar por Bluetooth directo» y luego imprime.', 'aviso');
         pintarActual();
@@ -459,7 +415,6 @@
           await BrowserPrint.enviar(destino.dispositivo, texto);
         } catch (e) {
           if (destino.exacto) throw e;
-          // Browser Print no tiene esa MAC en su lista y rechazó el envío directo.
           etapa = 'mac-desconocida';
           throw error('MacDesconocida', `${equipo.mac}: ${e.message}`);
         }
@@ -496,7 +451,6 @@
     });
     const datos = await r.json().catch(() => null);
     if (!r.ok || !datos?.impresa) throw error('RegistroError', `HTTP ${r.status}`);
-    // Cada pieza lleva su etiqueta: el embarque se puede guardar hasta que no falte ninguna.
     if (datos.pendientes) return datos;
 
     try { sessionStorage.setItem('tarima-impresa:' + uuid, '1'); } catch (e) { /* sin almacenamiento */ }
@@ -532,7 +486,7 @@
   });
 
   btnCancelar.addEventListener('click', () => {
-    if (!operacion) return; // ya terminó: no hay nada que cancelar
+    if (!operacion) return;
     btnCancelar.disabled = true;
     Ble.cancelar();
     mostrar('Cancelando…', 'aviso');
@@ -544,7 +498,7 @@
 
     let d;
     try {
-      d = await Ble.elegir(); // primera línea del toque
+      d = await Ble.elegir();
     } catch (e) {
       const [tipo, texto] = mensajeDeError(e, 'seleccion');
       mostrar(texto, tipo);
@@ -552,7 +506,7 @@
       return;
     }
 
-    // Prueba de conexión, con progreso y cancelable.
+
     ocupar('elegir', { cancelable: true });
     mostrar(MSG.conectando(d.name || 'la impresora'));
     Ble.cancelado = false;
@@ -577,8 +531,7 @@
     liberar();
     pintarActual();
 
-    // Inventario: qué impresoras ve Browser Print y con qué datos. Sirve para
-    // registrar la MAC sin errores y para saber por qué no coincide.
+
     const detectadas = $('impresorasDetectadas');
     if (!activo) {
       detectadas.hidden = true;
@@ -607,7 +560,6 @@
 
   selectorEquipo?.addEventListener('change', () => {
     almacen.guardar(CLAVE_EQUIPO, selectorEquipo.value);
-    // La conexión Bluetooth directa era con otra impresora: se suelta.
     if (Ble.dispositivo && equipo.nombreBluetooth && Ble.dispositivo.name !== equipo.nombreBluetooth) {
       Ble.desconectar();
       Ble.dispositivo = null;
@@ -628,16 +580,11 @@
   btnCalibrar?.addEventListener('click', async () => {
     if (operacion) return;
     if (!window.confirm('Se guardará en la impresora el tamaño de etiqueta configurado y se calibrará el sensor de papel. La impresora avanzará una o dos etiquetas en blanco. ¿Continuar?')) return;
-    // confirm() consume el toque: si hace falta elegir impresora, se pide antes.
     if (!BrowserPrint.destino() && !Ble.dispositivo) { mostrar(MSG.sinImpresora, 'aviso'); return; }
     if (await enviarA(btn.dataset.configuracion, 'calibrar')) mostrar(MSG.calibrada, 'ok');
   });
 
-  // ---------- Imprimir con el navegador ----------
-  // Solo para computadora con controlador Zebra instalado. Se imprime una copia
-  // de la etiqueta colgada directo del <body>: así no arrastra márgenes ni el
-  // espacio de la página (con visibility:hidden el resto seguía ocupando lugar
-  // y la etiqueta salía corrida hacia abajo).
+
   let raiz = null;
   function prepararImpresion() {
     const zona = $('zonaImpresion');
@@ -676,9 +623,7 @@
 
   window.addEventListener('pagehide', () => Ble.desconectar());
 
-  // ---------- Al cargar ----------
-  // Browser Print se busca de inmediato (no necesita toque) para que el botón
-  // Imprimir ya sepa si debe abrir el selector de Bluetooth.
+
   BrowserPrint.buscar().then(pintarActual);
   if (Ble.soportado()) Ble.recordado().then(pintarActual);
   pintarActual();

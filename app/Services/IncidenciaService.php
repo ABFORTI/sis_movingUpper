@@ -18,12 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 
-/**
- * Incidencias: se registran en cualquier momento de la operación sin detener el
- * escaneo. Solo hay dos tipos (no encontrado en inventario, producto dañado) y
- * dos estados (abierta, resuelta). Todo cambio deja un evento (historial que no
- * se modifica) y las decisiones del cliente solo se registran con evidencia.
- */
+
 class IncidenciaService {
     public function __construct(
         private readonly DocumentoService $documentos,
@@ -48,7 +43,7 @@ class IncidenciaService {
         }
         $partidas ??= BuscadorPiezas::resolver($mudanza, $datos['piezas'] ?? null);
 
-        // "No encontrado en inventario" se refiere a una sola N/S: se liga a ella.
+
         if ($datos['tipo'] === Incidencia::NO_EN_INVENTARIO && empty($datos['numero_serie_id'])) {
             $pieza = $partidas->count() === 1 ? $partidas->first()->loadMissing('tarima.movimiento') : null;
             if (! $pieza?->numero_serie_id) {
@@ -101,11 +96,7 @@ class IncidenciaService {
         }
     }
 
-    /**
-     * La N/S capturada no está en el inventario: se abre automáticamente al
-     * registrarla. Si ya hay una abierta para esa N/S (reintento), se devuelve
-     * la misma: nunca se crean dos iguales.
-     */
+
     public function crearNoEncontrada(NumeroSerie $serie, Tarima $tarima, User $usuario, ?string $pista = null, ?Collection $partidas = null): Incidencia {
         $existente = Incidencia::pendientesDeRevision()->where('numero_serie_id', $serie->id)->first();
         if ($existente) {
@@ -130,10 +121,7 @@ class IncidenciaService {
         ], $usuario, partidas: $partidas ?? collect());
     }
 
-    /**
-     * Al guardar una tarima sus N/S se vuelven partidas: las incidencias que
-     * se abrieron durante la captura quedan ligadas a esas piezas.
-     */
+
     public function vincularPiezasGuardadas(Tarima $tarima, User $usuario): void {
         $partidas = Partida::where('tarima_id', $tarima->id)->whereNotNull('numero_serie_id')->get()->keyBy('numero_serie_id');
         if ($partidas->isEmpty()) {
@@ -144,7 +132,7 @@ class IncidenciaService {
             ->each(fn (Incidencia $i) => $this->agregarPartidas($i, collect([$partidas[$i->numero_serie_id]]), $usuario));
     }
 
-    /** Vincula más piezas (texto con N/S o consecutivos, uno por línea). */
+
     public function vincular(Incidencia $incidencia, string $piezas, User $usuario): int {
         $partidas = BuscadorPiezas::resolver($incidencia->mudanza, $piezas);
 
@@ -173,7 +161,7 @@ class IncidenciaService {
         });
     }
 
-    /** Resuelta → abierta, con motivo. La resolución anterior queda en el historial. */
+
     public function reabrir(Incidencia $incidencia, User $usuario, ?string $motivo): void {
         if ($incidencia->estaVigente()) {
             throw ValidationException::withMessages(['nota' => 'La incidencia ya está abierta.']);
@@ -199,7 +187,7 @@ class IncidenciaService {
             throw ValidationException::withMessages(['resolucion' => 'La incidencia ya está resuelta.']);
         }
 
-        // Una decisión del cliente no se registra "de palabra": debe tener su respaldo.
+        
         if (in_array($tipoResolucion, Incidencia::RESOLUCIONES_DEL_CLIENTE, true) && $archivos === [] && ! $incidencia->evidencias()->exists()) {
             throw ValidationException::withMessages([
                 'archivos' => 'Esta resolución es una decisión del cliente: adjunta su respaldo (correo, documento, foto).',

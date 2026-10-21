@@ -18,17 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
-/**
- * Reporte Diario (antes "Entregas de inventario"): el Excel formal para el
- * cliente con el trabajo de un día, es decir, las piezas vigentes cuya fecha de
- * registro (cuando se escaneó su N/S, la columna "Fecha de registro" del Excel)
- * es ese día. Cada reporte lleva versión correlativa de la mudanza, archivo
- * guardado con SHA-256 y una copia de cada pieza tal como se entregó; si se
- * vuelve a generar el mismo día, se compara contra el reporte anterior de ese
- * día. Así se puede responder "¿qué se le entregó al cliente y cuándo?" aunque
- * después se corrijan embarques. Las entregas anteriores (mudanza completa,
- * sin fecha) se conservan tal cual.
- */
+
 class EntregaService {
     public function __construct(
         private readonly ExcelExportador $excel,
@@ -40,7 +30,7 @@ class EntregaService {
         return "entregas_mudanza_{$mudanza->id}";
     }
 
-    /** Inicio y fin del día en la zona horaria de la aplicación. */
+
     public static function dia(CarbonInterface|string $fecha): array {
         $dia = CarbonImmutable::parse($fecha instanceof CarbonInterface ? $fecha->format('Y-m-d') : $fecha, config('app.timezone'))->startOfDay();
 
@@ -48,8 +38,6 @@ class EntregaService {
     }
 
     /**
-     * Las piezas trabajadas ese día (las que entrarían al reporte), agrupadas
-     * por embarque, para revisarlas antes de generarlo.
      *
      * @return Collection<int, array{codigo: string, piezas: int, skus: int}>
      */
@@ -65,11 +53,10 @@ class EntregaService {
             ->sortBy('numero')->values();
     }
 
-    /** Lo que conviene revisar antes de entregar: piezas que no saldrán o etiquetas desactualizadas. */
+
     public function pendientes(Mudanza $mudanza, CarbonInterface|string|null $fecha = null): array {
         $enCaptura = Tarima::temporales()->where('mudanza_id', $mudanza->id)
             ->when($fecha, function ($q) use ($fecha) {
-                // Solo las que tienen piezas escaneadas ese día: esas son las que faltarían en el reporte.
                 $q->whereHas('registros.numerosSerie', fn ($n) => $n->whereBetween('numeros_serie.created_at', self::dia($fecha)));
             }, fn ($q) => $q->whereHas('registros'))
             ->orderBy('numero')->get();
@@ -91,7 +78,6 @@ class EntregaService {
 
         try {
             return DB::transaction(function () use ($mudanza, $usuario, $notas, $dia, &$guardado) {
-                // Un reporte a la vez por mudanza: la versión y la comparación con el anterior no se cruzan.
                 Mudanza::whereKey($mudanza->id)->lockForUpdate()->first();
 
                 $partidas = $this->partidasVigentes($mudanza, $dia);
@@ -99,7 +85,6 @@ class EntregaService {
                     throw ValidationException::withMessages(['entrega' => "No hay piezas guardadas registradas el {$dia->format('d/m/Y')}."]);
                 }
 
-                // Se compara contra el reporte anterior del mismo día.
                 $anterior = Entrega::where('mudanza_id', $mudanza->id)->whereDate('fecha', $dia->format('Y-m-d'))->latest('version')->first();
                 $previas = $anterior ? $anterior->filas()->get()->keyBy('partida_id')->toBase() : collect();
 
@@ -152,13 +137,12 @@ class EntregaService {
         }
     }
 
-    /** @return Collection<int, Partida> piezas registradas ese día en tarimas no anuladas, por consecutivo */
+    /** @return Collection<int, Partida> piezas registradas ese día  */
     private function partidasVigentes(Mudanza $mudanza, CarbonInterface|string $fecha): Collection {
         return Partida::enTarima()
             ->where('mudanza_id', $mudanza->id)
             ->whereBetween('registrado_at', self::dia($fecha))
             ->whereHas('tarima', fn ($q) => $q->vigentes())
-            // La carga más reciente: la del tráiler en que va (o fue) la pieza.
             ->with(['tarima', 'destino', 'incidenciaPendiente', 'incidencias' => fn ($q) => $q->vigentes(), 'carga' => fn ($q) => $q->latest('id')->with('embarque')])
             ->orderBy('consecutivo')
             ->get();
@@ -172,7 +156,6 @@ class EntregaService {
             'sku' => $p->sku,
             'descripcion' => $p->descripcion,
             'numero_serie' => $p->ns_mostrada,
-            // Histórico: la categoría ya no se captura ni sale en el Excel.
             'categoria' => $p->destino?->codigo,
             'registrado_at' => $p->registrado_at,
             'novedad' => match (true) {

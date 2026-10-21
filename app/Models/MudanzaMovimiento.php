@@ -6,11 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/**
- * Un traslado dentro de la mudanza: almacén origen → almacén destino. Una
- * mudanza puede tener varios (58 → 3 y 5 → 7). Las tarimas de un movimiento
- * se validan contra el inventario de su almacén de origen.
- */
+
 class MudanzaMovimiento extends Model {
     protected $table = 'mudanza_movimientos';
 

@@ -8,11 +8,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 
-/**
- * Tarimas registradas = tarimas guardadas (pasaron al historial), por
- * tarimas.guardada_at. Las temporales aún no cuentan; las eliminadas por el
- * administrador desaparecen de la base y tampoco.
- */
+
 class TarimasRegistradas extends SerieDiariaKpi {
     public function clave(): string { return 'tarimas-registradas'; }
     public function nombre(): string { return 'Tarimas registradas'; }
@@ -43,7 +39,6 @@ class TarimasRegistradas extends SerieDiariaKpi {
             $query->whereIn('tarimas.guardada_by', $usuarios);
         }
         if ($skus = $consulta->filtro('producto')) {
-            // whereExists y no join: una tarima con dos SKUs filtrados no se cuenta doble.
             $query->whereExists(fn (QueryBuilder $q) => $q->selectRaw('1')
                 ->from('registros')
                 ->whereColumn('registros.tarima_id', 'tarimas.id')

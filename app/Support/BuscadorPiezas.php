@@ -7,11 +7,7 @@ use App\Models\Partida;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Texto libre → partidas de la mudanza. Cada renglón (o valor separado por
- * coma/espacio) es una N/S o un consecutivo; así se pueden escanear con el
- * handheld en un textarea.
- */
+
 class BuscadorPiezas {
     /** @return Collection<int, Partida> */
     public static function resolver(Mudanza $mudanza, ?string $texto, string $campo = 'piezas'): Collection {

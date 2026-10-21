@@ -12,8 +12,6 @@ return [
             'report' => false,
         ],
 
-        // PDFs de la sección Manuales. Fuera de public/ y sin 'url' ni 'serve':
-        // solo se entregan por ManualController, que valida el rol del usuario.
         'manuales' => [
             'driver' => 'local',
             'root' => storage_path('app/private/manuales'),
@@ -22,9 +20,6 @@ return [
             'report' => false,
         ],
 
-        // Entregas al cliente (Excel versionados) y evidencias de incidencias.
-        // Privado: solo se descargan por sus controladores, que validan permisos
-        // y que el SHA-256 del archivo siga coincidiendo con el registrado.
         'documentos' => [
             'driver' => 'local',
             'root' => storage_path('app/private/documentos'),

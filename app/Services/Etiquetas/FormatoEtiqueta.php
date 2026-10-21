@@ -10,7 +10,6 @@ final class FormatoEtiqueta {
     public readonly int $desfaseX;
     public readonly int $margenX;
     public readonly int $ajusteQr;
-    /** ^LT en dots: mueve todo el contenido arriba (-) o abajo (+). ZPL acepta -120…120. */
     public readonly int $ajusteSuperior;
 
     public function __construct(

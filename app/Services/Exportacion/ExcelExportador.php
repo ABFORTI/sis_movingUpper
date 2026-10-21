@@ -14,53 +14,32 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ExcelExportador implements ExportadorTarimas {
     private const TIPO = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-    /**
-     * La categoría ya no se captura y salió del Excel. Embarque (antes
-     * "Tarima", mismo número) y Fecha de registro van al final para no mover
-     * las columnas que el cliente ya usa.
-     */
+
     public const ENCABEZADOS = [
         'Consecutivo', 'Número de parte (SKU)', 'Descripción', 'Cantidad',
         'Unidad de medida', 'Daño', 'Número de serie',
         'Embarque', 'Fecha de registro',
     ];
 
-    /**
-     * Reporte Diario: en lugar del embarque va el folio del tráiler en que se
-     * cargó la pieza (vacío si todavía no se carga).
-     */
+
     public const ENCABEZADOS_ENTREGA = [
         'Consecutivo', 'Número de parte (SKU)', 'Descripción', 'Cantidad',
         'Unidad de medida', 'Daño', 'Número de serie',
         'Tráiler', 'Fecha de registro',
     ];
 
-    /**
-     * Manifiesto del tráiler: exactamente estas ocho
-     * columnas, en este orden. "Categoría" es la posición de ubicación del
-     * inventario. Las filas las arma Manifiesto.
-     */
+
     public const MANIFIESTO = [
         'Consecutivo', 'Número de parte (SKU)', 'Descripción', 'Cantidad',
         'Unidad de medida', 'Categoría', 'Daño', 'Número de serie',
     ];
 
-    /** Columna del número de serie en el manifiesto. */
+
     public const COLUMNA_NS_MANIFIESTO = 8;
-
-    /** Columna (1 = A) del número de serie en el Excel de la mudanza y de la entrega. */
     public const COLUMNA_NS = 7;
-
-    /** Columna del número de serie en el reporte final de la mudanza. */
     public const COLUMNA_NS_REPORTE = 4;
-
-    /**
-     * Las filas pueden traer esta llave (no es columna): la celda de su número
-     * de serie se rellena de amarillo, sin agregar texto ni símbolos, porque
-     * esa N/S tiene abierta una incidencia de "no encontrado en inventario".
-     */
     public const PENDIENTE = 'pendiente_revision';
-
+    
     private const AMARILLO = 'FFFF00';
 
     public const CANTIDAD = 1;
@@ -68,8 +47,6 @@ class ExcelExportador implements ExportadorTarimas {
     public const DANO = 0;
 
     /**
-     * Una sola hoja con el encabezado del manifiesto y una fila por pieza: sin
-     * títulos, hojas ni columnas adicionales.
      *
      * @param  list<array>  $filas  de Manifiesto
      */
@@ -80,10 +57,7 @@ class ExcelExportador implements ExportadorTarimas {
         return $this->descargar($libro, "{$nombre}_".now()->format('Y-m-d').'.xlsx');
     }
 
-    /**
-     * Todas las piezas de esos embarques, por consecutivo. Se ordena por pieza y no
-     * por embarque: una pieza movida conserva su número aunque ahora esté en otra.
-     */
+
     public function todas(Collection $tarimas, string $alcance): StreamedResponse {
         $filas = Partida::enTarima()
             ->whereIn('tarima_id', $tarimas->modelKeys())
@@ -139,13 +113,9 @@ class ExcelExportador implements ExportadorTarimas {
     }
 
     /**
-     * Excel de una entrega al cliente: las mismas columnas del inventario más
-     * "Novedad" (respecto de la versión anterior) e "Incidencias abiertas"; una
-     * hoja "Control" con folio, versión y totales, y una hoja "Salieron" con las
-     * piezas de la versión anterior que ya no están. Devuelve el archivo.
      *
      * @param  list<array{0: string, 1: string|int}>  $control
-     * @param  list<array>  $filas  filas del inventario (9 columnas) + novedad + incidencias
+     * @param  list<array>  $filas  filas del inventario  + novedad + incidencias
      * @param  list<array>  $salieron
      */
     public function archivoEntrega(array $control, array $filas, array $salieron): string {
@@ -174,11 +144,7 @@ class ExcelExportador implements ExportadorTarimas {
         }
     }
 
-    /**
-     * Reporte de traslado: una fila por pieza con lo cargado y lo recibido.
-     * Sirve para toda la mudanza (reporte final) o para un solo tráiler
-     * (manifiesto del viaje); cambia solo el nombre del archivo.
-     */
+
     public function reporteFinal(string $folio, array $resumen, array $filas, string $nombre = 'Reporte_Final'): StreamedResponse {
         $libro = new Spreadsheet();
         $this->llenar(

@@ -150,4 +150,30 @@ const EST = { sku: 'EST-200', modelo: null, descripcion: 'Estufa', piezas: 1 };
   console.log('ok 6: respuestas tardías se descartan y sin inventario se avisa');
 }
 
+// 7. Lista abierta (de una búsqueda anterior): el Enter del escáner envía lo leído
+//    y no la opción resaltada; Enter elige de la lista solo tras navegar con flechas.
+{
+  const t = selector([opciones([EST, REF]), opciones([EST, REF]), opciones([EST, REF])]);
+  await espera(20);
+  t.escribir('e');
+  await espera(260);              // lista abierta con EST-200 resaltada
+  const enter = () => {
+    const e = new t.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    t.input.dispatchEvent(e);
+    return e;
+  };
+  t.escribir('REF-100');          // lectura del escáner, sin esperar la búsqueda
+  let e = enter();
+  assert.equal(e.defaultPrevented, false, 'el Enter del escáner envía');
+  assert.equal(t.input.value, 'REF-100');
+
+  t.escribir('E');
+  await espera(260);
+  t.input.dispatchEvent(new t.w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  e = enter();
+  assert.equal(e.defaultPrevented, true, 'tras las flechas, Enter elige sin enviar');
+  assert.equal(t.input.value, 'REF-100');
+  console.log('ok 7: con la lista abierta, Enter envía lo escaneado; con flechas, elige');
+}
+
 console.log('\nTodas las pruebas de validación de N/S y selector de SKU pasaron.');

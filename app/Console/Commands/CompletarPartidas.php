@@ -7,11 +7,8 @@ use App\Models\User;
 use App\Services\TarimaService;
 use Illuminate\Console\Command;
 
-/**
- * Busca embarques guardados con N/S sin partida (guardados por fuera del botón
- * Guardar) y, con --reparar, les completa las partidas como lo haría el
- * guardado. Sin --reparar solo informa.
- */
+
+
 class CompletarPartidas extends Command {
     protected $signature = 'tarimas:completar-partidas
         {--reparar : Crea las partidas que faltan}

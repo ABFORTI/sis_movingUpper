@@ -9,10 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class Manual extends Model {
-    /** Disco privado (config/filesystems.php): sin URL pública. */
+
     public const DISCO = 'manuales';
 
-    /** Tamaño máximo del PDF: 20 MB. PHP debe permitir al menos esto en upload_max_filesize y post_max_size. */
     public const TAMANO_MAXIMO_KB = 20480;
 
     protected $table = 'manuales';
@@ -35,7 +34,7 @@ class Manual extends Model {
         return $this->belongsTo(User::class, 'subido_by');
     }
 
-    /** Misma regla que ManualPolicy::view, pero como consulta. */
+
     public function scopeVisiblesPara(Builder $query, User $usuario): Builder {
         if ($usuario->isAdmin()) {
             return $query;

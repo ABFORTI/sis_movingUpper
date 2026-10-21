@@ -19,7 +19,6 @@ class ExportController extends Controller {
         private readonly BitacoraService $bitacora,
     ) { }
 
-    /** Alcance del Excel de trabajo: toda la mudanza (con filtros) o un solo embarque. */
     public const COMPLETO = 'completo';
     public const POR_EMBARQUE = 'embarque';
 
@@ -38,7 +37,6 @@ class ExportController extends Controller {
 
         $tarimas = Tarima::exportables()
             ->where('mudanza_id', $mudanza?->id ?? 0)
-            // Un embarque elegido se exporta completo: los filtros de texto solo acotan el Excel completo.
             ->when($porEmbarque, fn ($q) => $q->whereKey($embarqueId), fn ($q) => $q->filtrosHistorial($filtros))
             ->with(['mudanza', 'registros.numerosSerie'])
             ->orderBy('consecutivo_inicial')

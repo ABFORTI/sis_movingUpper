@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
-/** Una entrada del historial de una incidencia. Solo se inserta. */
+
 class IncidenciaEvento extends Model {
     public const UPDATED_AT = null;
 

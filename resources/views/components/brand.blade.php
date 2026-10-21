@@ -1,10 +1,4 @@
-{{--
-  Identidad: marca del sistema (MovingUpper) y, opcionalmente, el logo de la empresa
-  (Upper Logistics) separado por una línea. Los PNG de public/images/brand son recortes
-  de los originales de public/images, sin deformar.
 
-  Uso: <x-brand />  ·  <x-brand href="/" />  ·  <x-brand :empresa="false" tono="oscuro" />
---}}
 @props(['href' => null, 'empresa' => true, 'tono' => 'claro'])
 
 @php $tag = $href ? 'a' : 'span'; @endphp

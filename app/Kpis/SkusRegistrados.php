@@ -8,10 +8,7 @@ use App\Models\Registro;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
-/**
- * SKUs capturados en tarimas (registros vivos) por registros.created_at.
- * Un mismo SKU en dos tarimas son dos registros y un solo SKU distinto.
- */
+
 class SkusRegistrados extends SerieDiariaKpi {
     public function clave(): string { return 'skus-registrados'; }
     public function nombre(): string { return 'SKUs registrados'; }
@@ -64,7 +61,6 @@ class SkusRegistrados extends SerieDiariaKpi {
             'total_registros' => $total,
             'total_registros_padre' => $padres,
             'total_registros_simples' => $total - $padres,
-            // Minúsculas para coincidir con la intercalación de MySQL, que no distingue mayúsculas.
             'total_skus_distintos' => $filas->map(fn ($fila) => mb_strtolower($fila->sku))->unique()->count(),
         ];
     }

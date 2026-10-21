@@ -10,23 +10,7 @@ use App\Models\Partida;
 use App\Services\Inventario\InventarioService;
 use Illuminate\Support\Collection;
 
-/**
- * Filas del manifiesto del tráiler en Excel: una por pieza cargada en él, con
- * exactamente las ocho columnas de ExcelExportador::MANIFIESTO.
- *
- * - Consecutivo: 1, 2, 3… en el orden del manifiesto (no es el consecutivo
- *   fijo de la mudanza, que siguen usando el Excel de la mudanza y las entregas).
- * - Número de parte (SKU): el SKU elegido al registrar la pieza.
- * - Descripción: la del inventario: la del renglón con que coincidió la N/S y,
- *   si la N/S se registró como incidencia, la del SKU en el inventario del
- *   almacén de origen.
- * - Categoría: la "Posición de ubicación" del renglón del inventario de la
- *   pieza (vacía si la N/S no se encontró en el inventario).
- * - Daño: 1 si la N/S tiene una incidencia de "Producto dañado" que no se
- *   descartó ("no era una incidencia"); 0 en cualquier otro caso, aunque tenga
- *   otras incidencias (p. ej. "No encontrado en inventario").
- * - Número de serie: el capturado, tal cual se registró.
- */
+
 class Manifiesto {
     public function __construct(private readonly InventarioService $inventario) { }
 
@@ -75,13 +59,11 @@ class Manifiesto {
                 $item?->posicion,
                 $danada ? 1 : 0,
                 $p['numero_serie'],
-                // Fuera del Excel: solo indica qué celda de N/S va en amarillo.
                 ExcelExportador::PENDIENTE => (bool) $serie?->pendienteRevision(),
             ];
         })->all();
     }
 
-    /** Descripción del SKU en el inventario vigente del almacén. */
     private function descripcionDelSku(?int $almacenId, string $sku): ?string {
         $carga = $almacenId ? InventarioCarga::where('almacen_id', $almacenId)->where('vigente', true)->first() : null;
 
@@ -89,8 +71,6 @@ class Manifiesto {
     }
 
     /**
-     * N/S y partidas con una incidencia de "Producto dañado" no descartada,
-     * ligada a la N/S o a la pieza.
      *
      * @return array{0: array<int, true>, 1: array<int, true>}
      */

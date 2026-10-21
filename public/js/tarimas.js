@@ -45,7 +45,6 @@
       tarjeta.classList.add('is-leaving');
       setTimeout(() => tarjeta.remove(), 300);
     }
-    // Ya no se puede capturar en ella.
     document.querySelectorAll(`select[name="tarima"] option[value="${CSS.escape(uuid)}"]`).forEach(o => o.remove());
   }
 
@@ -60,7 +59,6 @@
     if (btn.disabled || btn.classList.contains('is-loading')) return;
 
     const uuid = btn.dataset.uuid;
-    // Antes de guardar se revisan los productos dañados: cada uno se vuelve incidencia.
     const anomalias = (btn.dataset.anomalias || '').split(', ').filter(Boolean);
     if (anomalias.length && !window.confirm(
       `Al guardar el ${btn.dataset.nombre} se registrará${anomalias.length === 1 ? '' : 'n'} ${anomalias.length} ` +
@@ -82,7 +80,7 @@
       });
       datos = await respuesta.json().catch(() => null);
     } catch (e) {
-      respuesta = null; // Error de red.
+      respuesta = null;
     }
 
     btn.classList.remove('is-loading');
@@ -100,22 +98,19 @@
     alerta('danger', respuesta ? mensajeDeError(respuesta, datos) : MSG_ERROR);
 
     if (respuesta?.status === 422) {
-      // El servidor dice que falta imprimir (o el contenido cambió): vuelve a bloquearlo.
       almacen.quitar(uuid);
       deshabilitar(btn);
     } else {
-      btn.disabled = false; // Permite reintentar.
+      btn.disabled = false;
     }
   }
 
   document.querySelectorAll('[data-guardar]').forEach(btn => {
     btn.addEventListener('click', () => guardar(btn));
-    // En una carga normal el servidor es la fuente de verdad: si dice "no impresa",
-    // se descarta cualquier aviso viejo del navegador.
     if (btn.disabled) almacen.quitar(btn.dataset.uuid);
   });
 
-  // Regreso con "Atrás": la página viene de la caché del navegador sin pedirla al servidor.
+
   window.addEventListener('pageshow', e => {
     if (!e.persisted) return;
     document.querySelectorAll('[data-guardar]:disabled').forEach(btn => {
@@ -123,7 +118,7 @@
     });
   });
 
-  // Impresión hecha en otra pestaña.
+  
   if ('BroadcastChannel' in window) {
     new BroadcastChannel(CANAL).addEventListener('message', e => {
       if (e.data?.tipo === 'impresa' && e.data.uuid) habilitar(e.data.uuid);

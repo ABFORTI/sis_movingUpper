@@ -5,12 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Una pieza en un embarque: quién y cuándo la subió (carga) y quién y cuándo la
- * bajó en el destino (recepción). Carga y recepción viven en la misma fila, así
- * que una pieza tiene un solo registro por traslado. `autorizacion_id` solo
- * existe en cargas anteriores a 2026-10-12 (histórico).
- */
+
 class EmbarquePartida extends Model {
     public $timestamps = false;
 

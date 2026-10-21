@@ -76,7 +76,6 @@
                 <td class="c-ns" data-label="N/S">
                   <span class="mono" style="font-size:13px;">{{ $fila['ns'] }}</span>
                   @if ($fila['pendiente_revision'])
-                    {{-- Vista pública: sin enlace a la incidencia (requiere sesión). --}}
                     <span class="badge badge-revision" title="No se encontró en el inventario; pendiente de revisión"><x-icon name="alert" class="icon-sm" /> Pendiente de revisión</span>
                   @endif
                 </td>

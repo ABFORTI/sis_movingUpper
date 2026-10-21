@@ -10,13 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\View\View;
 
-/**
- * Etiquetas de las piezas de un embarque: una por pieza. Por omisión se
- * preparan las que aún no se imprimen; también se pueden reimprimir todas o una
- * sola. Las piezas elegidas viajan como ids explícitos en las URL del ZPL y de
- * la confirmación, para que lo que se marca como impreso sea exactamente lo que
- * salió de la impresora aunque mientras tanto se escaneen más piezas.
- */
+
 class EtiquetaController extends Controller {
     public function __construct(private readonly EtiquetaService $etiquetas)
     { }

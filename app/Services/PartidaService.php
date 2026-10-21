@@ -18,18 +18,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Correcciones sobre tarimas ya guardadas: mover piezas a otra tarima o
- * retirarlas. La partida conserva su consecutivo (lo que el cliente ya recibió
- * en el Excel) y cada cambio queda en movimientos_partida y en la bitácora.
- *
- * También se ajusta la capa de captura (registros / numeros_serie) para que las
- * etiquetas, el historial y la consulta muestren lo que físicamente hay en cada
- * embarque. Cada pieza lleva su propia etiqueta con el número de embarque: una
- * pieza movida necesita etiqueta nueva (su embarque destino queda con
- * "reimpresión pendiente" hasta imprimirla); retirar piezas no cambia las
- * etiquetas de las que se quedan.
- */
+
 class PartidaService {
     public function __construct(
         private readonly TarimaService $tarimas,
@@ -66,7 +55,7 @@ class PartidaService {
                 ]);
             }
 
-            // La etiqueta pegada en cada pieza movida trae el número del embarque anterior.
+
             NumeroSerie::whereKey($partidas->pluck('numero_serie_id')->filter()->all())->update(['etiqueta_impresa_at' => null]);
             $this->pedirReimpresion($destino);
             $this->tarimas->actualizarAdicional($origen, $usuario);
@@ -83,10 +72,6 @@ class PartidaService {
     }
 
     /**
-     * Retira piezas del embarque (salen de la mudanza). Con NS_ELIMINADA es
-     * "Eliminar N/S": la N/S se capturó por error; misma salida del inventario,
-     * pero queda registrada como eliminación y su incidencia de "no encontrado
-     * en inventario", si la tenía, se resuelve.
      *
      * @param list<int> $ids
      */
@@ -135,13 +120,7 @@ class PartidaService {
         });
     }
 
-    /**
-     * "Agregar N/S a este modelo" en un embarque guardado: una pieza que faltó
-     * registrar. Se valida igual que en el escaneo (inventario del almacén de
-     * origen, sin duplicados; sin coincidencia abre su incidencia) y recibe el
-     * siguiente consecutivo de la mudanza. Necesita su etiqueta: el embarque
-     * queda con reimpresión pendiente hasta imprimirla.
-     */
+
     public function agregar(Tarima $tarima, Registro $modelo, string $capturada, User $usuario, string $motivo): NumeroSerie {
         $this->validarOrigen($tarima);
         if ($modelo->tarima_id !== $tarima->id || $modelo->tipo !== TipoRegistro::Padre) {
@@ -207,12 +186,7 @@ class PartidaService {
         }
     }
 
-    /**
-     * "Agregar N/S" con un SKU escrito: usa el modelo del embarque para ese SKU
-     * (se crea si no está) y, con $altaSku, da de alta el SKU en el almacén de
-     * origen si no viene en su inventario. Todo en una transacción: si la N/S
-     * se rechaza, no quedan ni el modelo ni el alta.
-     */
+
     public function agregarConSku(Tarima $tarima, string $sku, bool $altaSku, ?string $descripcion, string $capturada, User $usuario, string $motivo): NumeroSerie {
         $this->validarOrigen($tarima);
         $carga = $this->escaneo->inventarioDe($tarima, 'sku');
@@ -222,14 +196,7 @@ class PartidaService {
         ));
     }
 
-    /**
-     * "Editar N/S" en un embarque guardado: corrige el número de serie, el SKU o
-     * ambos. La pieza conserva su consecutivo; si cambia el SKU pasa a ese
-     * modelo dentro del mismo embarque. Se valida igual que una lectura nueva y
-     * el cambio queda en su movimiento (antes → después). Su etiqueta ya no
-     * coincide: el embarque queda con reimpresión pendiente. Con $altaSku, un
-     * SKU que no está en el inventario se da de alta en el almacén de origen.
-     */
+
     public function editar(Tarima $tarima, int $partidaId, string $sku, string $capturada, User $usuario, string $motivo, bool $altaSku = false, ?string $descripcion = null): NumeroSerie {
         $this->validarOrigen($tarima);
         $capturada = NumeroSerieNormalizado::limpio($capturada);
@@ -305,11 +272,7 @@ class PartidaService {
         }
     }
 
-    /**
-     * El producto del inventario del almacén de origen. Si el SKU no está ahí y
-     * se pidió darlo de alta, se da de alta solo con su código (como en
-     * Inventarios); si no, se rechaza para no asignar un SKU mal escrito.
-     */
+
     private function producto(InventarioCarga $carga, string $sku, bool $altaSku, ?string $descripcion, User $usuario): array {
         if ($this->inventario->sku($carga, $sku) === null) {
             if (! $altaSku) {
@@ -334,7 +297,7 @@ class PartidaService {
         }
     }
 
-    /** Bloquea los embarques en orden de id para que dos correcciones cruzadas no se traben. */
+
     private function bloquear(Tarima ...$tarimas): void {
         Tarima::whereKey(array_map(fn (Tarima $t) => $t->id, $tarimas))->orderBy('id')->lockForUpdate()->get();
     }
@@ -358,11 +321,7 @@ class PartidaService {
         return $partidas;
     }
 
-    /**
-     * La pieza cambia de tarima también en la captura. Una N/S pasa al SKU padre
-     * del mismo SKU en el destino (se crea si no existe); un SKU sin N/S mueve su
-     * registro completo.
-     */
+
     private function moverCaptura(Partida $partida, Tarima $destino, User $usuario): void {
         $existente = Registro::where('tarima_id', $destino->id)->where('sku', $partida->sku)->first();
 
@@ -399,7 +358,7 @@ class PartidaService {
         $this->limpiarRegistroVacio($registroOrigen, $usuario);
     }
 
-    /** Un SKU padre que se quedó sin N/S ya no está físicamente en la tarima. */
+
     private function limpiarRegistroVacio(int $registroId, User $usuario): void {
         if (! NumeroSerie::where('registro_id', $registroId)->exists()) {
             Registro::whereKey($registroId)->update(['deleted_at' => now(), 'deleted_by' => $usuario->id]);

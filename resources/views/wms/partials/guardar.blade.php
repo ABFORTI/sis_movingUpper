@@ -1,9 +1,4 @@
-{{--
-  Guardar: pasa el embarque de temporal al historial. Se habilita solo cuando
-  ya se confirmó la impresión de la etiqueta de cada una de sus piezas
-  (Tarima::listaParaGuardar en el servidor).
-  tarimas.js lo habilita sin recargar y hace el guardado; el servidor vuelve a validar todo.
---}}
+
 @php
   $impresa = $tarima->listaParaGuardar();
   $conAnomalia = $tarima->registros->flatMap->numerosSerie->filter->tieneAnomalia()->pluck('numero_serie');

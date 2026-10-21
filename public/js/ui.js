@@ -28,7 +28,7 @@
   document.addEventListener('submit', e => {
     const form = e.target.closest('form[data-motivo]');
     if (!form) return;
-    if (form.motivo.value.trim()) return; // ya trae motivo: se envía
+    if (form.motivo.value.trim()) return;
     e.preventDefault();
 
     if (!dialogo || typeof dialogo.showModal !== 'function') {
@@ -99,7 +99,7 @@
     });
   });
 
-  // Excel de trabajo: el selector de embarque solo aplica (y es obligatorio) con alcance "Por embarque".
+
   document.querySelectorAll('[data-excel-alcance]').forEach(form => {
     const alcance = form.querySelector('[data-alcance]');
     const embarque = form.querySelector('[data-alcance-embarque]');
@@ -112,8 +112,6 @@
     sincronizar();
   });
 
-  // Selector de PDF: muestra el archivo elegido y avisa antes de enviar si no es PDF o pesa demasiado.
-  // Es solo ayuda visual: el servidor vuelve a validar todo.
   document.querySelectorAll('[data-file-drop]').forEach(zona => {
     const input = zona.querySelector('input[type="file"]');
     const nombre = zona.querySelector('[data-file-name]');

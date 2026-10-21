@@ -9,33 +9,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-/** Un hallazgo o diferencia de la mudanza, con su historial y evidencias. */
+
 class Incidencia extends Model {
     public const ABIERTA = 'abierta';
     public const RESUELTA = 'resuelta';
 
-    /** Los únicos estados operativos. */
     public const ESTADOS = [
         self::ABIERTA => 'Abierta',
         self::RESUELTA => 'Resuelta',
     ];
 
-    /** Estados en los que la incidencia sigue viva (y puede bloquear la carga). */
+
     public const VIGENTES = [self::ABIERTA];
 
     public const NO_EN_INVENTARIO = 'no_en_inventario';
     public const DANIO = 'danio';
 
-    /** Los únicos tipos que se registran hoy. */
+
     public const TIPOS = [
         self::NO_EN_INVENTARIO => 'No encontrado en inventario',
         self::DANIO => 'Producto dañado',
     ];
 
-    /**
-     * Tipos de incidencias anteriores a la simplificación. Ya no se registran,
-     * pero las existentes conservan su tipo y se muestran con este nombre.
-     */
+
     public const TIPOS_HISTORICOS = [
         'ns_duplicada' => 'N/S duplicada o inconsistente (histórico)',
         'sin_identificacion' => 'Producto sin identificación (histórico)',
@@ -58,7 +54,6 @@ class Incidencia extends Model {
         'otro' => 'Otro',
     ];
 
-    /** Resoluciones que son decisión del cliente: exigen evidencia adjunta (correo, documento). */
     public const RESOLUCIONES_DEL_CLIENTE = ['corregido_sap', 'aceptado_cliente', 'excluido_traslado'];
 
     protected $fillable = [
@@ -105,7 +100,6 @@ class Incidencia extends Model {
         return $this->morphMany(Evidencia::class, 'evidenciable')->orderBy('id');
     }
 
-    /** N/S capturada a la que se refiere (incidencias de "no encontrado en inventario"). */
     public function numeroSerie(): BelongsTo {
         return $this->belongsTo(NumeroSerie::class)->withTrashed();
     }
@@ -134,7 +128,6 @@ class Incidencia extends Model {
         return $query->whereIn('estado', self::VIGENTES);
     }
 
-    /** Abiertas de "no encontrado en inventario": las piezas quedan señaladas como pendientes de revisión. */
     public function scopePendientesDeRevision(Builder $query): Builder {
         return $query->where('tipo', self::NO_EN_INVENTARIO)->where('estado', self::ABIERTA);
     }

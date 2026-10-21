@@ -41,7 +41,7 @@ class UsuarioController extends Controller {
             return back()->withInput()->withErrors(['rol' => 'No puedes quitarte el rol de administrador ni desactivarte.']);
         }
 
-        // Cambiar el rol solo cambia los permisos: datos, capturas e historial del usuario se conservan.
+        
         $dejaDeSerAdmin = $usuario->isAdmin() && ($request->validated('rol') !== Role::ADMIN || ! $request->boolean('is_active'));
         $otrosAdmins = User::whereKeyNot($usuario->id)->where('is_active', true)
             ->whereHas('roles', fn ($q) => $q->where('slug', Role::ADMIN))->exists();

@@ -12,10 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
-/**
- * Administrador: todo el ciclo de vida. Auditor: ver, crear y activar
- * (MudanzaRequest y MudanzaService::puede aplican la regla en el servidor).
- */
+
 class MudanzaController extends Controller {
     public function __construct(private readonly MudanzaService $mudanzas) { }
 

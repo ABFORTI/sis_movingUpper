@@ -9,11 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
-/**
- * Registra acciones de negocio con quién, cuándo, desde dónde y por qué. Los
- * servicios lo llaman de forma explícita para que cada entrada tenga sentido
- * operativo ("tarima.anulada"), no un volcado genérico de cambios.
- */
+
 class BitacoraService {
     public const TARIMA_ANULADA = 'tarima.anulada';
     public const TARIMA_VACIADA = 'tarima.vaciada';
@@ -22,7 +18,7 @@ class BitacoraService {
 
     public function __construct(private readonly Request $request) { }
 
-    /** Si no se indica la mudanza, se toma de la entidad cuando la tiene (p. ej. una tarima). */
+
     public function registrar(string $accion, ?User $usuario, ?Model $entidad = null, array $datos = [], ?string $motivo = null, ?Mudanza $mudanza = null): Bitacora {
         return Bitacora::create([
             'mudanza_id' => $mudanza?->id ?? $entidad?->getAttribute('mudanza_id'),

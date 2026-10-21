@@ -8,7 +8,7 @@ use App\Support\SkuActivo;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
-/** Pantalla de captura: SKU (del inventario del almacén de la tarima) + N/S. */
+
 class WmsController extends Controller {
     public function index(Request $request, SkuActivo $skuActivo, MudanzaActiva $mudanzaActiva): View {
         $mudanza = $mudanzaActiva->obtener()?->load(['movimientos.origen', 'movimientos.destino']);
