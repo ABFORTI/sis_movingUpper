@@ -5,9 +5,7 @@ namespace App\Policies;
 use App\Models\Tarima;
 use App\Models\User;
 
-/**
- * Todos los usuarios trabajan la misma mudanza, así que todos ven todas las tarimas
- */
+
 class TarimaPolicy {
     public function view(User $usuario, Tarima $tarima): bool {
         return true;

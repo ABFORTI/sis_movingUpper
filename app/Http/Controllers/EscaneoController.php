@@ -51,18 +51,21 @@ class EscaneoController extends Controller {
         }
 
         $tarima = $request->tarima();
-        $registro = $this->escaneo->registrarSkuPadre($tarima, $request->validated('sku'), $request->user());
+        $registro = $this->escaneo->registrarSkuPadre($tarima, $request->validated('sku'), $request->user(), $request->demo());
         $this->skuActivo->activar($registro);
         $request->session()->put('wms.tarima', $tarima->uuid);
         $conversion = $registro->fueConvertido() ? " Conversión aplicada: {$registro->sku_original} → {$registro->sku}." : '';
+        $demo = $registro->demo->esDemo() ? " ({$registro->demo->etiqueta()})" : '';
 
         if (! $registro->wasRecentlyCreated) {
             $n = $registro->numerosSerie()->count();
+            // Reabierto: conserva lo que se eligió la primera vez (sus etiquetas ya pueden llevarlo).
+            $distinto = $registro->demo !== $request->demo() ? " Se conserva «{$registro->demo->etiqueta()}» de cuando se abrió." : '';
 
-            return redirect()->route('wms')->with('ok', "SKU {$registro->sku} reabierto en {$tarima->nombre} (lleva {$n} N/S). Sigue con las N/S.{$conversion}");
+            return redirect()->route('wms')->with('ok', "SKU {$registro->sku}{$demo} reabierto en {$tarima->nombre} (lleva {$n} N/S). Sigue con las N/S.{$conversion}{$distinto}");
         }
 
-        return redirect()->route('wms')->with('ok', "SKU {$registro->sku} activo en {$tarima->nombre}. Escanea o escribe las N/S.{$conversion}");
+        return redirect()->route('wms')->with('ok', "SKU {$registro->sku}{$demo} activo en {$tarima->nombre}. Escanea o escribe las N/S.{$conversion}");
     }
 
     public function cerrarPadre(): RedirectResponse {

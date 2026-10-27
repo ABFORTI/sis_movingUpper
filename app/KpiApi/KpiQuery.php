@@ -9,7 +9,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 final class KpiQuery {
     /**
      * @param array<string, string[]> $filtros    filtros generales aplicados
-     * @param array<string, mixed>    $parametros parámetros propios del KPI, ya tipados y con defaults
+     * @param array<string, mixed>    $parametros parámetros propios del KPI
      */
     public function __construct(
         public readonly CarbonImmutable $fechaInicio,
@@ -22,7 +22,7 @@ final class KpiQuery {
     ) {
     }
 
-    /** @return string[]|null valores del filtro, o null si no se envió */
+    /** @return string[]|null valores del filtro, o null */
     public function filtro(string $nombre): ?array {
         return $this->filtros[$nombre] ?? null;
     }

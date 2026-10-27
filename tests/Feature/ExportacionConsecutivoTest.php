@@ -325,18 +325,19 @@ class ExportacionConsecutivoTest extends TestCase {
             $this->assertSame(1, $libro->getSheetCount());
             $this->assertNull($libro->getSheetByName('Resumen'));
             $hoja = $libro->getSheet(0);
-            $this->assertSame('I', $hoja->getHighestColumn());
-            $this->assertSame(ExcelExportador::ENCABEZADOS, $hoja->rangeToArray('A1:I1', null, false, false)[0]);
+            $this->assertSame('J', $hoja->getHighestColumn());
+            $this->assertSame(ExcelExportador::ENCABEZADOS, $hoja->rangeToArray('A1:J1', null, false, false)[0]);
             // La categoría ya no se captura: salió del Excel.
             $this->assertSame([
                 'Consecutivo', 'Número de parte (SKU)', 'Descripción', 'Cantidad',
                 'Unidad de medida', 'Daño', 'Número de serie',
-                'Embarque', 'Fecha de registro',
+                'Embarque', 'Fecha de registro', 'Demo',
             ], ExcelExportador::ENCABEZADOS);
 
             $datos = $this->datos($libro);
             foreach ($datos as $fila) {
-                $this->assertCount(9, $fila);
+                $this->assertCount(10, $fila);
+                $this->assertSame('No aplica', $fila[9]);
                 $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $fila[8]);
                 $this->assertNotContains('TOTAL', $fila);
                 $this->assertNotContains('GRAN TOTAL', $fila);

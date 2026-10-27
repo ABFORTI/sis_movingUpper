@@ -1,17 +1,3 @@
-/*
- *
- * 1. Cada lectura entra al localStorage y se
- *    envía en orden. Si no hay red, el servidor tarda o la sesión expiró, la
- *    lectura queda "Pendiente de envío" y se reintenta sola (al volver la red,
- *    al regresar a la app o con el botón).
- * 2. Reintentar no duplica: cargar o recibir lo que ya está en el tráiler
- *    responde "repetido" sin cambiar nada (lo garantiza el servidor). Si un
- *    reintento responde "repetido", el primer envío sí llegó: se muestra como
- *    guardado.
- * 3. Una doble lectura del gatillo (mismo código en menos de 1.5 s) se ignora.
- * 4. Lo que el servidor rechaza no bloquea las lecturas siguientes; su aviso
- *    queda en la lista.
- */
 (function () {
   'use strict';
 
@@ -216,7 +202,6 @@
   }
 
   form.addEventListener('submit', e => {
-    // El botón de incidencia del flujo sin JavaScript se envía normal.
     if (e.submitter?.hasAttribute('formaction')) return;
     e.preventDefault();
 
@@ -248,12 +233,9 @@
   });
 
   // ---------- Recuperación ----------
-  // Lecturas que quedaron pendientes al cerrar o recargar: se muestran y se envían.
   cola.forEach(item => anotar(item, 'pendiente', 'Quedó pendiente; reenviando…'));
   if (cola.length) procesar();
 
-  // Lecturas pendientes de otra etapa de este tráiler (p. ej. carga sin enviar
-  // y el tráiler ya salió): no se envían a otra operación ni se pierden en silencio.
   const base = CLAVE.slice(0, CLAVE.lastIndexOf('-') + 1);
   almacen.claves().filter(k => k.startsWith(base) && k !== CLAVE).forEach(k => {
     const viejas = almacen.leer(k);

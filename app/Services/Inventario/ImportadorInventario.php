@@ -126,6 +126,7 @@ class ImportadorInventario {
         $firmas = [];
         $series = [];
         $otrosAlmacenes = [];
+        $sinSerie = [];
 
         for ($fila = $filaEncabezado + 1; $fila <= $ultimaFila; $fila++) {
             $valores = [];
@@ -146,13 +147,10 @@ class ImportadorInventario {
                 $errores[] = "Fila {$fila}: no tiene SKU.";
                 continue;
             }
+
             $tieneSerie = false;
             foreach (array_keys(InventarioItem::CAMPOS_SERIE) as $campo) {
                 $tieneSerie = $tieneSerie || ($valores[$campo] ?? '') !== '';
-            }
-            if (! $tieneSerie) {
-                $errores[] = "Fila {$fila}: el SKU {$valores['sku']} no tiene ningún número de serie.";
-                continue;
             }
             $largo = array_filter(self::LIMITES, fn (int $max, string $campo) => mb_strlen($valores[$campo] ?? '') > $max, ARRAY_FILTER_USE_BOTH);
             if ($largo) {
@@ -173,12 +171,16 @@ class ImportadorInventario {
                 $item[$campo.'_norm'] = $item[$campo] === null ? null : NumeroSerieNormalizado::de($item[$campo]);
             }
 
-            $firma = implode("\x1F", [$item['sku_norm'], $item['ns_fabricante_norm'], $item['numero_serie_norm'], $item['ns_lote_norm']]);
-            if (isset($firmas[$firma])) {
-                $avisos[] = "Fila {$fila}: repite la fila {$firmas[$firma]}; se importó una sola vez.";
-                continue;
+            if ($tieneSerie) {
+                $firma = implode("\x1F", [$item['sku_norm'], $item['ns_fabricante_norm'], $item['numero_serie_norm'], $item['ns_lote_norm']]);
+                if (isset($firmas[$firma])) {
+                    $avisos[] = "Fila {$fila}: repite la fila {$firmas[$firma]}; se importó una sola vez.";
+                    continue;
+                }
+                $firmas[$firma] = $fila;
+            } else {
+                $sinSerie[] = $fila;
             }
-            $firmas[$firma] = $fila;
 
             foreach ([InventarioItem::NS_FABRICANTE, InventarioItem::NUMERO_SERIE] as $campo) {
                 $valor = $item[$campo.'_norm'];
@@ -200,6 +202,11 @@ class ImportadorInventario {
             throw ValidationException::withMessages([
                 'archivo' => "El archivo trae filas de otro almacén: {$detalle}. Elegiste el {$almacen->etiqueta}; no se cargó nada.",
             ]);
+        }
+        if ($sinSerie) {
+            $n = count($sinSerie);
+            $avisos[] = ($n === 1 ? "La fila {$sinSerie[0]} no tiene" : "{$n} filas (p. ej. fila {$sinSerie[0]}) no tienen")
+                .' número de serie: se importaron solo con su SKU. Al escanear sus N/S quedan pendientes de revisión.';
         }
 
         return [
@@ -248,8 +255,7 @@ class ImportadorInventario {
                 isset($columnas[$campo]) ? $repetidas[] = $this->texto($celda) : $columnas[$campo] = $celda->getColumn();
             }
 
-            $series = array_intersect_key($columnas, InventarioItem::CAMPOS_SERIE);
-            if (isset($columnas['sku']) && $series !== []) {
+            if (isset($columnas['sku'])) {
                 if ($repetidas) {
                     throw ValidationException::withMessages([
                         'archivo' => "La fila {$fila} tiene columnas repetidas o ambiguas: ".implode(', ', $repetidas).'. Deja una sola columna por dato.',
@@ -261,11 +267,10 @@ class ImportadorInventario {
         }
 
         throw ValidationException::withMessages([
-            'archivo' => 'No se encontraron los encabezados del inventario. El archivo debe tener una columna «SKU» y al menos una de «Número de serie del fabricante», «Número de serie» o «Número de serie de lote» (además, opcionalmente, «Modelo» y «Descripción»).',
+            'archivo' => 'No se encontraron los encabezados del inventario. El archivo debe tener una columna «SKU» (y, opcionalmente, «Número de serie del fabricante», «Número de serie», «Número de serie de lote», «Modelo» y «Descripción»).',
         ]);
     }
 
-    /** Texto de una celda sin alterar su contenido: los números enteros no pasan a notación científica. */
     private function texto(Cell $celda): string {
         $valor = $celda->isFormula() ? ($celda->getOldCalculatedValue() ?? $celda->getCalculatedValue()) : $celda->getValue();
 
@@ -278,7 +283,6 @@ class ImportadorInventario {
         return NumeroSerieNormalizado::limpio(is_scalar($valor) ? (string) $valor : '');
     }
 
-    /** "Número de Serie del Fabricante:" → "numero de serie del fabricante". */
     public static function normalizarEncabezado(string $texto): string {
         $texto = mb_strtolower(Str::ascii(NumeroSerieNormalizado::limpio($texto)));
         $texto = (string) preg_replace('/[^a-z0-9\/]+/', ' ', $texto);

@@ -129,6 +129,17 @@
                   <input id="descripcion" class="input input-derivado" readonly tabindex="-1" placeholder="Se completa al elegir el SKU" data-sku-descripcion>
                 </div>
 
+                {{-- Sale en las etiquetas y en el Excel de las piezas de este SKU. --}}
+                <div class="field">
+                  <label for="demo" class="label">¿Es demo? <span class="optional">sale en la etiqueta y el Excel</span></label>
+                  <select id="demo" name="demo" @class(['input', 'is-invalid' => $errors->has('demo')]) @disabled($tarimas->isEmpty())>
+                    @foreach (\App\Enums\Demo::cases() as $opcion)
+                      <option value="{{ $opcion->value }}" @selected(old('demo', \App\Enums\Demo::NoAplica->value) === $opcion->value)>{{ $opcion->etiqueta() }}</option>
+                    @endforeach
+                  </select>
+                  @error('demo') <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
+                </div>
+
                 <button type="submit" class="btn btn-primary btn-block" style="margin-top:18px;" @disabled($tarimas->isEmpty())>
                   <x-icon name="unlock" /> Activar SKU
                 </button>
@@ -150,6 +161,9 @@
               <p class="active-sku-desc">{{ $skuActivo->descripcion_mostrada }}</p>
               <div class="active-sku-meta">
                 <span><x-icon name="layers" /> {{ $skuActivo->tarima->nombre }}</span>
+                @if ($skuActivo->demo->esDemo())
+                  <span class="badge badge-warn" data-sku-demo>{{ $skuActivo->demo->etiqueta() }}</span>
+                @endif
                 @if ($skuActivo->tarima->almacenOrigen())
                   <span><x-icon name="map-pin" /> {{ $skuActivo->tarima->almacenOrigen()->etiqueta }}</span>
                 @endif

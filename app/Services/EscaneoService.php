@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\Demo;
 use App\Enums\TipoRegistro;
 use App\Models\InventarioCarga;
 use App\Models\InventarioItem;
@@ -29,15 +30,15 @@ class EscaneoService {
     ) { }
 
 
-    public function registrarSkuPadre(Tarima $tarima, string $sku, User $usuario): Registro {
+    public function registrarSkuPadre(Tarima $tarima, string $sku, User $usuario, Demo $demo = Demo::NoAplica): Registro {
         $producto = $this->productoDe($this->inventarioDe($tarima, 'sku'), $sku);
         $sku = $producto['sku'];
 
         try {
-            return DB::transaction(function () use ($tarima, $producto, $usuario) {
+            return DB::transaction(function () use ($tarima, $producto, $usuario, $demo) {
                 $this->asegurarTemporal($tarima, 'sku');
 
-                return $this->modeloEn($tarima, $producto, $usuario);
+                return $this->modeloEn($tarima, $producto, $usuario, $demo);
             });
         } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages(['sku' => "El SKU {$sku} ya está en el {$tarima->nombre}."]);
@@ -213,7 +214,7 @@ class EscaneoService {
         return $this->inventario->pista($carga, $sku, $capturada);
     }
 
-    public function modeloEn(Tarima $tarima, array $producto, User $usuario): Registro {
+    public function modeloEn(Tarima $tarima, array $producto, User $usuario, Demo $demo = Demo::NoAplica): Registro {
         $existente = $tarima->registros()->where('sku', $producto['sku'])->first();
         if ($existente && $existente->tipo !== TipoRegistro::Padre) {
             throw ValidationException::withMessages(['sku' => "El SKU {$producto['sku']} ya está en el {$tarima->nombre} como registro sin N/S (histórico)."]);
@@ -224,6 +225,7 @@ class EscaneoService {
             'sku' => $producto['sku'],
             'sku_original' => $producto['sku_original'] ?? null,
             'descripcion' => $producto['descripcion'] ?? $producto['modelo'],
+            'demo' => $demo,
             'user_id' => $usuario->id,
         ]);
     }

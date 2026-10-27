@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Demo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,8 @@ class Partida extends Model {
     public const TIPO_SKU = 'sku';
     public const TIPO_SIN_NS = 'sin_ns';
 
+    protected $attributes = ['demo' => 'Na'];
+
     protected $fillable = [
         'mudanza_id',
         'tarima_id',
@@ -26,6 +29,7 @@ class Partida extends Model {
         'tipo_identificacion',
         'sku',
         'descripcion',
+        'demo',
         'numero_serie',
         'destino_id',
         'registrado_at',
@@ -35,6 +39,7 @@ class Partida extends Model {
     protected function casts(): array {
         return [
             'consecutivo' => 'integer',
+            'demo' => Demo::class,
             'registrado_at' => 'datetime',
             'retirada_at' => 'datetime',
         ];

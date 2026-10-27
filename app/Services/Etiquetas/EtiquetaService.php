@@ -74,7 +74,10 @@ class EtiquetaService {
         $modelos = $this->modelos($tarima, $piezas);
         $embarque = $tarima->loadMissing('mudanza')->identificador;
 
-        return $piezas->map(fn (NumeroSerie $ns) => $this->diseno->lienzo($modelos[$ns->id], $embarque, $ns->numero_serie, $ns->registro->sku_original))->all();
+        return $piezas->map(fn (NumeroSerie $ns) => $this->diseno->lienzo(
+            $modelos[$ns->id], $embarque, $ns->numero_serie, $ns->registro->sku_original,
+            $ns->registro->demo->esDemo() ? $ns->registro->demo->etiqueta() : null,
+        ))->all();
     }
 
     /** @param  list<int>|null  $ids */

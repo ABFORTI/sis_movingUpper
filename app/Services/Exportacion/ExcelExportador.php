@@ -18,7 +18,7 @@ class ExcelExportador implements ExportadorTarimas {
     public const ENCABEZADOS = [
         'Consecutivo', 'Número de parte (SKU)', 'Descripción', 'Cantidad',
         'Unidad de medida', 'Daño', 'Número de serie',
-        'Embarque', 'Fecha de registro',
+        'Embarque', 'Fecha de registro', 'Demo',
     ];
 
 
@@ -81,13 +81,14 @@ class ExcelExportador implements ExportadorTarimas {
             $p->ns_mostrada,
             $p->tarima->numero,
             $p->registrado_at?->format('Y-m-d H:i:s'),
+            $p->demo->etiqueta(),
             self::PENDIENTE => $p->pendienteRevision(),
         ];
     }
 
     private function libro(array $filas): Spreadsheet {
         $libro = new Spreadsheet();
-        $this->llenar($libro->getActiveSheet()->setTitle('Mudanza'), [self::ENCABEZADOS, ...$filas], [13, 22, 32, 10, 17, 8, 20, 9, 20], self::COLUMNA_NS);
+        $this->llenar($libro->getActiveSheet()->setTitle('Mudanza'), [self::ENCABEZADOS, ...$filas], [13, 22, 32, 10, 17, 8, 20, 9, 20, 11], self::COLUMNA_NS);
 
         return $libro;
     }

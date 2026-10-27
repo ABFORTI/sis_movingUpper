@@ -55,7 +55,7 @@ class CorreccionTarimaController extends Controller {
         ]);
     }
 
-    /** Completa las partidas de un embarque que quedó guardado sin ellas (TarimaService::completarPartidas). */
+
     public function completar(Request $request, Tarima $tarima): RedirectResponse {
         $n = $this->tarimas->completarPartidas($tarima, $request->user());
         $tarima->refresh();

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Demo;
 use App\Enums\TipoRegistro;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,12 +12,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Registro extends Model {
     use SoftDeletes;
 
+    protected $attributes = ['demo' => 'Na'];
+
     protected $fillable = [
         'tarima_id',
         'tipo',
         'sku',
         'sku_original',
         'descripcion',
+        'demo',
         'destino_id',
         'user_id',
         'deleted_by',
@@ -25,6 +29,7 @@ class Registro extends Model {
     protected function casts(): array {
         return [
             'tipo' => TipoRegistro::class,
+            'demo' => Demo::class,
         ];
     }
 

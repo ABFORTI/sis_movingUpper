@@ -87,8 +87,9 @@
             <input id="archivo" name="archivo" type="file" required accept=".xlsx,.xls,.csv" @class(['input', 'is-invalid' => $errors->has('archivo')]) style="padding:8px;height:auto;">
             @error('archivo') <p class="field-error"><x-icon name="alert" /> {{ $message }}</p> @enderror
             <p class="hint">
-              Encabezados reconocidos (en cualquier orden): <b>SKU</b> (obligatorio), <b>Modelo</b>, <b>Descripción</b> y al menos uno de
-              <b>Número de serie del fabricante</b>, <b>Número de serie</b> o <b>Número de serie de lote</b>.
+              Encabezados reconocidos (en cualquier orden): <b>SKU</b> (obligatorio), <b>Modelo</b>, <b>Descripción</b>,
+              <b>Número de serie del fabricante</b>, <b>Número de serie</b> y <b>Número de serie de lote</b>.
+              Las filas sin número de serie se importan solo con su SKU.
               Si el archivo trae columna <b>Almacén</b>, debe coincidir con el elegido.
             </p>
           </div>

@@ -119,7 +119,6 @@ class InventarioService {
     }
 
     /**
-     * Renglones del SKU cuyo número de serie del fabricante, número de serie o número de serie de lote coincide con lo capturado
      *
      * @return Collection<int, InventarioItem>
      */

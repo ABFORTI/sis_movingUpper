@@ -92,7 +92,7 @@ class PartidaService {
                     $this->incidencias->resolver($partida->incidenciaPendiente, 'corregido_upper',
                         "Se eliminó la N/S {$partida->numero_serie} (#{$partida->consecutivo}) del {$origen->nombre}: {$motivo}", $usuario);
                 }
-                // La N/S se libera: si la pieza aparece de nuevo se escanea y recibe un consecutivo nuevo.
+               
                 if ($partida->numero_serie_id) {
                     NumeroSerie::whereKey($partida->numero_serie_id)->update(['deleted_at' => $ahora, 'deleted_by' => $usuario->id]);
                     $this->limpiarRegistroVacio($partida->registro_id, $usuario);
@@ -155,6 +155,7 @@ class PartidaService {
                     'tipo_identificacion' => Partida::TIPO_NS,
                     'sku' => $modelo->sku,
                     'descripcion' => $modelo->descripcion,
+                    'demo' => $modelo->demo,
                     'numero_serie' => $valor,
                     'destino_id' => $modelo->destino_id,
                     'registrado_at' => $serie->created_at,
@@ -240,6 +241,7 @@ class PartidaService {
                     'registro_id' => $modelo->id,
                     'sku' => $modelo->sku,
                     'descripcion' => $modelo->descripcion,
+                    'demo' => $modelo->demo,
                     'numero_serie' => $valor,
                 ]);
                 $detalle = "{$antes} → SKU {$modelo->sku} · N/S {$valor}";
@@ -348,6 +350,7 @@ class PartidaService {
             'sku' => $partida->sku,
             'sku_original' => $partida->registro?->sku_original,
             'descripcion' => $partida->descripcion,
+            'demo' => $partida->demo,
             'destino_id' => $partida->destino_id,
             'user_id' => $usuario->id,
         ]);

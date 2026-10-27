@@ -28,14 +28,12 @@ class EmbarqueService {
         return "embarques_mudanza_{$mudanza->id}";
     }
 
-    /** Placas y remolque se comparan y guardan así: «abc 123 » y «ABC  123» son el mismo. */
     private static function clave(string $valor): string {
         return mb_strtoupper(preg_replace('/\s+/u', ' ', trim($valor)));
     }
 
     /**
-     * Valores ya registrados en tráileres anteriores (de cualquier mudanza), los
-     * más recientes primero y sin repetidos, para sugerirlos al escribir.
+     * Valores ya registrados en tráileres anteriores (de cualquier mudanza)
      *
      * @param list<'placas'|'remolque'|'chofer'> $campos
      * @return array<string, list<string>>
@@ -48,7 +46,6 @@ class EmbarqueService {
         ])->all();
     }
 
-    /** El chofer se escribe a mano: si ya está registrado con otras mayúsculas o espacios, se usa el registrado. */
     private function choferRegistrado(?string $chofer): ?string {
         if ($chofer === null || trim($chofer) === '') {
             return null;
@@ -96,7 +93,6 @@ class EmbarqueService {
     }
 
     /**
-     * Escaneo en el andén.
      *
      * @return array{estado: string, mensaje: string, tarima: string, tarima_id: int, piezas: int}
      */

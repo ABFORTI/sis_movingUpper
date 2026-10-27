@@ -88,7 +88,7 @@ class InventarioTest extends TestCase {
             self::ENCABEZADO,
             ['SKU-1', null, 'Bomba', 'F-1', 'S-1', null],
             [null, null, 'Sin SKU', 'F-2', null, null],              // sin SKU
-            ['SKU-2', null, 'Sin serie', null, null, null],          // sin ningún N/S
+            ['SKU-2', null, 'Sin serie', null, null, null],          // sin ningún N/S: se importa solo con su SKU
             ['SKU-1', null, 'Bomba', 'F-1', 'S-1', null],            // repetida exacta
             ['SKU-3', null, 'Motor', null, 'S-1', null],             // N/S ya usada en otra fila
             [str_repeat('X', 101), null, 'SKU largo', null, 'S-9', null],
@@ -97,21 +97,43 @@ class InventarioTest extends TestCase {
         $this->cargar($archivo)->assertSessionHas('warn');
 
         $carga = InventarioCarga::sole();
-        $this->assertSame([6, 2, 4], [$carga->filas_leidas, $carga->filas_importadas, $carga->filas_omitidas]);
-        $this->assertSame(['SKU-1', 'SKU-3'], InventarioItem::orderBy('id')->pluck('sku')->all());
-        $this->assertSame(3, $carga->observaciones['total_errores']);
-        $this->assertSame(2, $carga->observaciones['total_avisos']);
+        $this->assertSame([6, 3, 3], [$carga->filas_leidas, $carga->filas_importadas, $carga->filas_omitidas]);
+        $this->assertSame(['SKU-1', 'SKU-2', 'SKU-3'], InventarioItem::orderBy('id')->pluck('sku')->all());
+        $this->assertSame(2, $carga->observaciones['total_errores']);
+        $this->assertSame(3, $carga->observaciones['total_avisos']);
         $this->assertStringContainsString('Fila 3: no tiene SKU', implode(' ', $carga->observaciones['errores']));
-        $this->assertStringContainsString('ningún número de serie', implode(' ', $carga->observaciones['errores']));
+        $this->assertStringContainsString('La fila 4 no tiene número de serie', implode(' ', $carga->observaciones['avisos']));
         $this->assertStringContainsString('repite la fila 2', implode(' ', $carga->observaciones['avisos']));
         $this->assertStringContainsString('S-1 también está en la fila 2', implode(' ', $carga->observaciones['avisos']));
 
         $this->get(route('inventarios.index'))->assertSee('filas no se importaron')->assertSee('Fila 3: no tiene SKU');
     }
 
+    public function test_un_excel_sin_numeros_de_serie_se_importa_con_su_sku(): void {
+        // Sin ninguna columna de N/S: basta el SKU. Filas iguales sin N/S son piezas distintas.
+        $this->cargar($this->excel([
+            ['SKU', 'Descripción'],
+            ['COMP-1', 'Compresor'],
+            ['COMP-1', 'Compresor'],
+            ['MOT-2', 'Motor'],
+        ]))->assertSessionHasNoErrors()->assertSessionHas('warn');
+
+        $carga = InventarioCarga::sole();
+        $this->assertSame([3, 3, 0], [$carga->filas_leidas, $carga->filas_importadas, $carga->filas_omitidas]);
+        $this->assertSame(['COMP-1', 'COMP-1', 'MOT-2'], InventarioItem::orderBy('id')->pluck('sku')->all());
+        $this->assertNull(InventarioItem::whereNotNull('numero_serie')->orWhereNotNull('ns_fabricante')->orWhereNotNull('ns_lote')->first());
+        $this->assertStringContainsString('3 filas (p. ej. fila 2) no tienen número de serie', implode(' ', $carga->observaciones['avisos']));
+
+        // El SKU se puede elegir al escanear; su N/S no coincide y queda pendiente de revisión.
+        $operador = $this->operador();
+        $tarima = $this->tarima($operador);
+        $this->actingAs($operador)->post(route('escaneo.padre'), ['sku' => 'COMP-1', 'tarima' => $tarima->uuid])->assertSessionHasNoErrors();
+        $this->postJson(route('escaneo.ns'), ['numero_serie' => 'CP-1'])->assertOk()->assertJson(['estado' => 'registrada']);
+        $this->assertTrue(\App\Models\NumeroSerie::sole()->pendienteRevision());
+    }
+
     public function test_estructura_invalida_se_rechaza_completa(): void {
-        $this->cargar($this->excel([['Código', 'Texto'], ['A', 'B']]))->assertSessionHasErrors('archivo');
-        $this->cargar($this->excel([['SKU', 'Descripción'], ['A', 'B']]))->assertSessionHasErrors('archivo');
+        $this->cargar($this->excel([['Producto', 'Texto'], ['A', 'B']]))->assertSessionHasErrors('archivo');
         $this->cargar($this->excel([['SKU', 'Número de serie', 'N/S'], ['A', '1', '2']]))->assertSessionHasErrors('archivo');
         $this->cargar(UploadedFile::fake()->create('inventario.pdf', 10, 'application/pdf'))->assertSessionHasErrors('archivo');
         $this->cargar(UploadedFile::fake()->createWithContent('inventario.xlsx', 'no es un excel'))->assertSessionHasErrors('archivo');

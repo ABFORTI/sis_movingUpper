@@ -12,9 +12,6 @@ class ZplRenderer {
         $media = self::MEDIA[$f->media] ?? throw new InvalidArgumentException("Tipo de papel no válido: {$f->media}");
         $dx = $f->desfaseX;
 
-        // Cada etiqueta lleva su propia configuración de papel y origen. Así no
-        // depende de lo que la impresora tenga guardado de otro rollo u otra app
-        // (un ^LT o ^LS viejo es lo que corre el contenido hacia abajo o lo corta).
         $zpl = [
             '^XA',
             '^CI28',                    // UTF-8

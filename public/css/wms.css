@@ -481,6 +481,11 @@ select.input {
 
 .print-layout { display: grid; grid-template-columns: minmax(320px, 400px) minmax(0, 1fr); gap: 24px; align-items: start; }
 .action-list { display: grid; gap: 8px; }
+/* Textos largos ("Conectar por Bluetooth directo (Chrome)"): en pantalla angosta
+   bajan a dos líneas en vez de salirse; el botón crece y no baja de su alto. */
+@media (max-width: 560px) {
+  .action-list .btn { height: auto; min-height: var(--h); padding-block: 8px; white-space: normal; line-height: 1.25; text-align: center; }
+}
 .status-box { margin-top: 12px; min-height: 0; font-size: 13px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; }
 .status-box:empty { display: none; }
 .note { display: flex; gap: 10px; font-size: 12.5px; color: var(--text-3); padding: 14px; background: var(--surface-2); border-radius: var(--r-md); border: 1px solid var(--border); margin-top: 18px; line-height: 1.55; }
@@ -565,7 +570,8 @@ select.input {
   .topbar .brand-divider, .topbar .brand-company { display: none; }
 }
 @media (max-width: 1024px) {
-  .workspace, .print-layout { grid-template-columns: 1fr; }
+  /* minmax(0, …): una opción larga de un select no ensancha la columna más que la pantalla. */
+  .workspace, .print-layout { grid-template-columns: minmax(0, 1fr); }
   .sticky-col { position: static; }
   .auth { grid-template-columns: 1fr; }
   .auth-aside { display: none; }

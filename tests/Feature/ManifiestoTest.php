@@ -194,6 +194,6 @@ class ManifiestoTest extends TestCase {
         $this->postJson(route('tarimas.guardar', $this->embarque))->assertOk();
 
         $hoja = $this->libro($this->get(route('export.todas')))->getSheet(0);
-        $this->assertSame(ExcelExportador::ENCABEZADOS, $hoja->rangeToArray('A1:I1', null, false, false)[0]);
+        $this->assertSame(ExcelExportador::ENCABEZADOS, $hoja->rangeToArray('A1:J1', null, false, false)[0]);
     }
 }
