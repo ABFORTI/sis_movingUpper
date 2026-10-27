@@ -49,17 +49,3 @@ En Android 10 o posterior, el teclado desaparece un instante en cada lectura: es
 - **Distribución para handheld:** el campo de N/S y su resultado quedan justo debajo del selector de modo. La tarjeta del SKU activo va debajo, y las tarimas con muchas N/S muestran solo las últimas 8.
 
 No se puede desde la web (requiere APK): leer la simbología del código, controlar el gatillo, cambiar la configuración del escáner desde la app o recibir la lectura por Intent.
-
----
-
-## 3. Impresora Zebra por Bluetooth
-
-**Funciona sin APK**, con los dos caminos que ya tiene `public/js/impresion.js` (ver `docs/impresion-zebra-zq620.md`):
-
-| Camino | En la PWA instalada | Comentario |
-|---|---|---|
-| **Zebra Browser Print** (app oficial de Zebra) | Sí. La página le habla en `https://localhost:9101`; da igual si es pestaña o PWA. | **Recomendado en handheld.** Recuerda la impresora predeterminada: no pide elegirla en cada etiqueta. |
-| **Web Bluetooth** (BLE, sin instalar nada) | Sí. Es la misma API de Chrome. | Pide elegir la impresora en un selector. **[VERIFICAR EN EQUIPO]** Que el permiso se recuerde entre páginas depende de `navigator.bluetooth.getDevices()` en la versión de Chrome del equipo. Si no, el selector aparece en cada etiqueta. |
-
-**Bluetooth Classic (SPP), el que usa el emparejamiento normal de Android, no está disponible para ninguna página web**, esté instalada o no. Por eso existen Browser Print y Web Bluetooth. Una APK con el SDK Link-OS de Zebra sí lo usaría, e imprimiría sin selector y sin la app de Browser Print.
-
